@@ -1,0 +1,13 @@
+﻿name = "swapiki-subdomain-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Route every profile subdomain through this worker. Unlike a Pages custom
+# domain, a wildcard route is accepted here, and the worker runs at the edge
+# before Pages — so the subdomain reaches us instead of Pages redirecting an
+# unrecognised hostname back to swapiki.com. The worker then forwards to
+# swapiki.pages.dev with the real host in X-Original-Host, which is what
+# functions/_middleware.js reads to server-render the profile.
+routes = [
+  { pattern = "*.swapiki.com/*", zone_name = "swapiki.com" }
+]

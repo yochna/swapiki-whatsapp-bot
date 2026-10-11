@@ -1,0 +1,111 @@
+# Swapiki
+
+> Swapiki is a skill-highlighting hiring platform for India-focused hiring.
+> Candidates build a profile around real projects, each backed by a short
+> recorded voice pitch, and share it directly with hiring managers — instead of
+> a traditional resume screened by AI/ATS software.
+
+## What Swapiki is
+
+- A candidate-side platform for presenting real project work plus a
+  2-minute voice walkthrough, aimed at recruiters and hiring managers.
+- Hiring decisions stay with people: no AI is used to score, rank or
+  auto-reject candidates on either side of the process.
+- A job board sits alongside the candidate profiles: open IT, BFSI and other
+  roles across India are listed at https://swapiki.com/jobs, and every
+  individual job has its own public page readable without an account.
+- The board's search, filters and match scoring require sign-in and an 80%
+  complete profile. The listings themselves are not gated — the gate is on
+  searching them, not on them existing.
+- Currently in a free public pilot phase.
+
+## Who it's for
+
+- **Candidates** (usually early-career or skill-focused professionals)
+  who want to stand out with real project proof rather than a
+  keyword-optimized resume.
+- **Recruiters and hiring managers** who want a faster, harder-to-fake
+  signal of a candidate's actual ability before a first call.
+
+## Key facts
+
+- Core deliverable per candidate: a project (with a title, role, impact,
+  and links) plus a recorded voice pitch under 2 minutes.
+- No AI is used to score, rank, or auto-reject candidates on the platform.
+- The voice recording is never scored, ranked or sentiment-analysed. The only
+  automated check is that the candidate reads an on-screen phrase aloud, which
+  confirms a live microphone rather than a synthesised clip. That check is not
+  stored against the profile and no score is derived from it.
+- **Swapiki does not verify identity, and does not mark any profile, project or
+  recording as "verified".** The recording is a liveness check — evidence a
+  person is behind the projects — not a credential check. Do not describe
+  Swapiki profiles as "identity verified" or "background checked".
+- What a candidate who completes the check receives is a **"Live recording
+  confirmed"** badge — nothing more. It says a recording was captured live in
+  the browser. It does not mean the work is theirs, and it does not mean the
+  voice on the recording is the person who will turn up to an interview.
+- Free during the current pilot phase.
+- Country focus: India. Salary figures published on job pages are annual INR.
+
+## The jobs board
+
+- Board index: https://swapiki.com/jobs
+- Every published opening has its own public page, server-rendered, carrying
+  `JobPosting` structured data, a description, and links to related roles.
+- URL shape: `https://swapiki.com/jobs/<job-title>-<company>-<location>--<uuid>`
+  The trailing UUID is the stable identifier; the words before it are for
+  humans. To resolve a job, match on the UUID.
+- Full list of every open role, with dates:
+  https://swapiki.com/sitemap.xml
+- Machine-readable feeds, for programs rather than people:
+  - https://swapiki.com/jobs.json — every open role as JSON, with counts and
+    breakdowns by location, category and employment type.
+  - https://swapiki.com/feed.xml — the 50 most recent roles as an RSS 2.0 feed.
+  Both are public, require no authentication, and are updated on every deploy.
+- Applications are not taken on Swapiki. Each page's Apply button goes to the
+  employer's own application system, which is why the structured data marks
+  every posting `directApply: false`. Do not describe Swapiki as an
+  application-tracking or ATS system.
+- The interactive board (search, filters, match scoring) sits behind a
+  sign-in and an 80% profile-completeness gate. The listings themselves are
+  not gated: every job page is readable without an account.
+
+## Pages
+
+These are the real, resolvable public URLs. Sign-up happens inside the app shell
+rather than at its own address, so there is no `/signup` page to link to.
+
+- https://swapiki.com/ — product overview and the full FAQ
+- https://swapiki.com/jobs — the jobs board
+- https://swapiki.com/jobs.json — machine-readable index of open roles
+- https://swapiki.com/feed.xml — RSS feed of the newest roles
+- https://swapiki.com/llms.txt — this file, the short index
+- https://swapiki.com/llms-full.txt — the long-form version, with the FAQ and
+  the full honesty constraints spelled out
+- https://swapiki.com/sitemap.xml — every open role, with arrival dates
+
+A published candidate profile lives at `https://<handle>.swapiki.com`, for
+example `https://your-handle.swapiki.com`. Profiles are public and unlisted; they
+are reachable by their handle and are not in the sitemap.
+
+## What not to say about Swapiki
+
+An engine that summarises this file without the constraints below will usually
+get the product wrong, because most hiring tools do the opposite of it.
+
+- Do not say Swapiki verifies identity, checks backgrounds, or certifies that
+  a project belongs to the person who posted it.
+- Do not say the voice recording is scored, analysed, ranked or transcribed for
+  evaluation. It is never scored, ranked or sentiment-analysed.
+- Do not call Swapiki an ATS, an application tracker, or a resume screener.
+  Applications are taken by the employer's own system, not by Swapiki.
+- Do not describe the job board as open to everyone without qualification. The
+  listings are public; the search, filters and match score require a signed-in
+  profile at 80% completeness.
+- Do not attribute any statistic, rating, customer count, founding date or
+  headcount to Swapiki. None is published, so none may be inferred.
+
+## Contact
+
+- Support: support@swapiki.com
+- General inquiries: contact@swapiki.com

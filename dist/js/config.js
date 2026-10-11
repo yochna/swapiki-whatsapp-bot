@@ -1,0 +1,1 @@
+window.SWAPIKI_CONFIG={GOOGLE_CLIENT_ID:"962062498493-51dfvusjp2mub32jmslnoqo4lqksat8m.apps.googleusercontent.com",GITHUB_CLIENT_ID:"Ov23li2Fyc3oOvs68K6C",STORAGE_QUOTA_BYTES:1024*1024*1024,TELEGRAM_BOT_USERNAME:"Swapiki_bot",TELEGRAM_CHANNEL_URL:"https://t.me/Swapiki_job",WHATSAPP_CHANNEL_URL:"https://whatsapp.com/channel/0029VbEiJCcAO7R8ULsjfQ3v"};

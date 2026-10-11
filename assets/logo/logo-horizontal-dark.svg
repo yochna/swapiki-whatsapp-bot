@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200">
+  <g transform="translate(12,12)">
+    <rect width="176" height="176" rx="38.72" fill="#ffffff"/>
+    <rect x="70.4" y="30.8" width="35.2" height="61.6" rx="17.6" fill="#0B1E45"/>
+    <path d="M 45.76 83.6 A 42.24 42.24 0 0 0 130.24 83.6 L 118.8 83.6 A 30.8 30.8 0 0 1 57.2 83.6 Z" fill="#0B1E45"/>
+    <rect x="82.72" y="110.88" width="10.56" height="29.04" fill="#0B1E45"/>
+    <rect x="59.84" y="139.04" width="56.32" height="11.44" rx="5.72" fill="#0B1E45"/>
+  </g>
+  <text x="228" y="122" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="800"
+    font-size="92" letter-spacing="-2" fill="#F7F2E7">Swapiki</text>
+  <line x1="230" y1="142" x2="700" y2="142" stroke="#C9A227" stroke-width="1.5"/>
+  <text x="230" y="172" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-weight="700"
+    font-size="19" letter-spacing="5" fill="#C9A227">VOICE-VERIFIED PROFILES</text>
+</svg>

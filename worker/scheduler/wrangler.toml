@@ -1,0 +1,22 @@
+name = "swapiki-jobs-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# No public URL. This Worker only acts on the cron trigger and has no fetch
+# handler, so there is nothing to serve - leaving workers.dev on would just
+# publish an endpoint nobody needs.
+workers_dev = false
+preview_urls = false
+
+# Every 2 hours, at :23 - off the hour on purpose so this does not pile onto the
+# same Adzuna rate-limit window as every other scheduled job on the internet. The
+# reason the schedule moved from once a day to twice an hour is the review bot: a
+# draft queued at 09:00 is messaged by 09:05, so the admin is deciding while the
+# job is still open. A once-daily board was already a day stale before anyone
+# looked at it. Nine search queries at up to two pages each is at most 18 Adzuna
+# calls per run, ~216 a day, well inside the free daily allowance.
+[triggers]
+crons = ["23 */2 * * *"]
+
+[observability]
+enabled = true

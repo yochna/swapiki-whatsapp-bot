@@ -1,0 +1,17 @@
+name = "swapiki-nudge-emails"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Runs once a day at 09:00 UTC (~2:30pm IST). Adjust the cron expression
+# to whatever time you'd like these to go out.
+[triggers]
+crons = ["0 9 * * *"]
+
+# Secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ZEPTOMAIL_TOKEN,
+# ZEPTOMAIL_FROM_ADDRESS, ZEPTOMAIL_API_URL) are NOT set here — never put
+# secrets in a file you might commit to git. Set each one with:
+#   npx wrangler secret put SUPABASE_URL
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   npx wrangler secret put ZEPTOMAIL_TOKEN
+#   npx wrangler secret put ZEPTOMAIL_FROM_ADDRESS
+#   npx wrangler secret put ZEPTOMAIL_API_URL

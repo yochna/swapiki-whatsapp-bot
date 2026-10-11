@@ -1,0 +1,17 @@
+{
+  "name": "swapiki-whatsapp-bot",
+  "description": "Posts the daily Swapiki jobs digest to a WhatsApp group via Baileys (WhatsApp Web protocol).",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.19",
+    "qrcode": "^1.5.4"
+  }
+}

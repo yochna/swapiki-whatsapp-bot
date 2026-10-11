@@ -1,0 +1,16 @@
+{
+  "name": "swapiki",
+  "private": true,
+"scripts": {
+    "test": "node --test tests/*.test.js",
+    "build:css": "tailwindcss -i ./src/input.css -o ./dist/output.css --minify",
+    "build:js": "esbuild js/app.js js/store.js js/audioEngine.js js/googleAuth.js js/profileChecklist.js js/profileMatch.js js/githubMatch.js config.js --minify --target=es2018 --entry-names=[name] --outdir=dist/js",
+    "build": "npm run build:js && npm run build:css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.13",
+    "@tailwindcss/forms": "^0.5.9",
+    "@tailwindcss/container-queries": "^0.1.1",
+    "esbuild": "latest"
+  }
+}

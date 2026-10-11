@@ -1,0 +1,20 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="avatar">
+  <defs>
+    <clipPath id="c-dummy-it-015"><circle cx="100" cy="100" r="100"/></clipPath>
+  </defs>
+  <g clip-path="url(#c-dummy-it-015)">
+    <rect width="200" height="200" fill="#e4ecfa"/>
+    <path d="M30 200 C30 148 62 132 100 132 C138 132 170 148 170 200 Z" fill="#35507a"/>
+    <rect x="87" y="116" width="26" height="34" rx="9" fill="#b06f43"/>
+    <circle cx="100" cy="94" r="60" fill="#1d1611"/>
+    
+    <circle cx="100" cy="100" r="54" fill="#b06f43"/>
+    <circle cx="46" cy="104" r="10" fill="#b06f43"/>
+    <circle cx="154" cy="104" r="10" fill="#b06f43"/>
+    <path d="M64 96 Q 80 88 96 96" stroke="#1d1611" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M104 96 Q 120 88 136 96" stroke="#1d1611" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <circle cx="81" cy="106" r="4.5" fill="#241b12"/>
+    <circle cx="119" cy="106" r="4.5" fill="#241b12"/>
+    <path d="M88 128 Q 100 139 112 128" stroke="#8a4a2a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,105 @@
+# Swapiki — crawl policy
+#
+# Everything here is public and intended to be read, including by AI answer
+# engines. The job pages are the product's search surface; withholding them from
+# a crawler would hide the listings from the people searching for them.
+#
+# The AI crawlers are listed explicitly rather than left to inherit
+# "User-agent: *". That is not because the wildcard does not already cover them -
+# it does. It is because each of these operators reads a more specific rule when
+# one exists, and because a named, deliberate allow is the difference between
+# "we did not think about it" and "we decided this". One line each, no surprises.
+
+User-agent: *
+Allow: /
+Allow: /jobs
+Allow: /jobs.json
+Allow: /feed.xml
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /sitemap.xml
+Allow: /robots.txt
+
+# Answer engines and dataset crawlers.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: Claude-SearchBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: DeepSeekBot
+Allow: /
+
+# Assistant fetches: /llms.txt and /llms-full.txt exist so these have something
+# short to read first, and /jobs.json so they can enumerate the board without
+# fetching a page per role.
+User-agent: CCBot
+Allow: /
+
+# Signed-in surfaces carry no indexable value and none of it is public, so they
+# are kept out of crawl budgets. The gate itself is enforced in the app, not
+# here - this is about not wasting crawl attention, not about access control.
+User-agent: *
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /admin
+Disallow: /api/
+
+# The machine-readable summary, per the llms.txt convention.
+# https://swapiki.com/llms.txt
+
+Sitemap: https://swapiki.com/sitemap.xml

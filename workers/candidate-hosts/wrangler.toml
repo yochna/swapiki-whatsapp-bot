@@ -1,0 +1,11 @@
+# Reuses the long-standing `swapiki-subdomain-proxy` Worker (it already owns
+# the `*.swapiki.com/*` route) with the corrected fetch target: the custom
+# domain swapiki.com (served with a 200 by Pages) instead of swapiki.pages.dev
+# (which Pages 301-redirects to the custom domain, breaking candidate links).
+name = "swapiki-subdomain-proxy"
+main = "index.js"
+compatibility_date = "2026-09-20"
+
+[[routes]]
+pattern = "*.swapiki.com/*"
+zone_name = "swapiki.com"

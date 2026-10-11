@@ -1,0 +1,8 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Swapiki</title>
+  <rect width="400" height="400" rx="88" fill="#0B1E45"/>
+  <rect x="160" y="70" width="80" height="140" rx="40" fill="#ffffff"/>
+  <path d="M 104 190 A 96 96 0 0 0 296 190 L 270 190 A 70 70 0 0 1 130 190 Z" fill="#ffffff"/>
+  <rect x="188" y="252" width="24" height="66" fill="#ffffff"/>
+  <rect x="136" y="316" width="128" height="26" rx="13" fill="#ffffff"/>
+</svg>
