@@ -191,8 +191,12 @@ async function handle(request, cfg, bot) {
     const qr = bot.qr();
     let image = "";
     if (qr) image = await QRCode.toDataURL(qr, { margin: 1, width: 320 });
+    // While unpaired the page reloads every 4s so the QR on screen is never
+    // stale: WhatsApp rotates it ~every 20s and scanning an old one fails with
+    // "Couldn't link devices".
+    const refresh = bot.connected() ? "" : `<meta http-equiv="refresh" content="4">`;
     const html =
-      `<!doctype html><html><head><meta charset="utf-8"><title>Swapiki WhatsApp pairing</title></head><body>` +
+      `<!doctype html><html><head><meta charset="utf-8">${refresh}<title>Swapiki WhatsApp pairing</title></head><body>` +
       `<h1>Swapiki · WhatsApp digest bot</h1>` +
       (bot.connected()
         ? `<p>Connected to WhatsApp. The daily digest is live.</p>`

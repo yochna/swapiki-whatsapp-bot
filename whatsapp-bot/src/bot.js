@@ -12,7 +12,7 @@
 //   in Supabase and the socket reconnects by itself (with an auto-reconnect on
 //   any drop, so a Render restart does not need a human).
 
-import makeWASocket, { DisconnectReason, initAuthCreds } from "@whiskeysockets/baileys";
+import makeWASocket, { DisconnectReason, initAuthCreds, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import { loadSession, saveSession } from "./session.js";
 
 /** Small auth-state adapter between Baileys' keyed signal store and our blob. */
@@ -58,12 +58,28 @@ export function createBot(db) {
   /** True when the socket has a live WhatsApp connection. */
   const connected = () => isOpen;
 
-  async function connect() {
+  /** The current WA Web client version, or null (Baileys' bundled value) if unfetchable. */
+async function currentWaVersion() {
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    return Array.isArray(version) && version.length === 3 ? version : null;
+  } catch {
+    return null;
+  }
+}
+
+async function connect() {
     if (booting) return booting;
     booting = (async () => {
       if (stopped) return;
       const auth = await loadAuthState(db);
+      // WhatsApp periodically raises the minimum accepted Web client version; when
+      // Baileys' bundled number goes stale, the link handshake fails on the phone
+      // with "Couldn't link devices". Resolve the current version at boot so the
+      // QR offered is actually accepted by the phone.
+      const version = await currentWaVersion();
       const socket = makeWASocket({
+        version,
         auth: auth.state,
         printQRInTerminal: false,
         browser: ["Swapiki Jobs", "Chrome", "Linux"],
