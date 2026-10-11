@@ -12,13 +12,17 @@
 //   in Supabase and the socket reconnects by itself (with an auto-reconnect on
 //   any drop, so a Render restart does not need a human).
 
-import makeWASocket, { DisconnectReason } from "@whiskeysockets/baileys";
+import makeWASocket, { DisconnectReason, initAuthCreds } from "@whiskeysockets/baileys";
 import { loadSession, saveSession } from "./session.js";
 
 /** Small auth-state adapter between Baileys' keyed signal store and our blob. */
 async function loadAuthState(db) {
   const saved = await loadSession(db).catch(() => null);
-  const creds = (saved && saved.creds) || {};
+  // A fresh (or partial/corrupt) session has no keys: seeding the creds with
+  // initAuthCreds() gives Baileys the noiseKey/identityKey/signedPreKey it will
+  // need for the very first handshake. Without it creds.noiseKey is undefined
+  // and processHandshake crashes before a pairing QR is ever emitted.
+  const creds = saved && saved.creds && saved.creds.noiseKey ? saved.creds : initAuthCreds();
   const map = new Map(Object.entries((saved && saved.keys) || {}));
   const keys = {
     async get(type, ids) {
