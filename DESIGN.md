@@ -142,7 +142,7 @@ The palette is anchored by **Navy Blue (#1e3a8a)**, symbolizing stability and in
 - **Secondary:** Blue (#2563eb) used for interactive elements and subtle highlights to provide visual energy without sacrificing professionalism.
 - **Tertiary:** Slate (#0f172a) used for maximum contrast text and dark-themed components.
 - **Neutral:** A foundation of White (#ffffff) and Slate-50 (#f8fafc) creates a clean, airy background that allows content to remain the focus.
-- **Functional:** Success (Emerald), Error (Rose), and Warning (Amber) are used sparingly as status indicators (e.g., "Human Verified" badges).
+- **Functional:** Success (Emerald), Error (Rose), and Warning (Amber) are used sparingly as status indicators (e.g., "Live recording confirmed" badges).
 
 ## Typography
 
@@ -179,7 +179,7 @@ The design system uses a **Rounded (Level 2)** shape language. This provides a b
 - **Standard (0.5rem):** Used for buttons, input fields, and small cards.
 - **Large (1rem):** Used for primary section containers, testimonial blocks, and featured profile cards.
 - **Extra Large (1.5rem):** Reserved for high-level decorative elements or hero background containers.
-- **Pill:** Strictly used for status badges (e.g., "Human Verified") and specific "Join" indicators.
+- **Pill:** Strictly used for status badges (e.g., "Live recording confirmed") and specific "Join" indicators.
 
 ## Components
 
@@ -199,7 +199,7 @@ The design system uses a **Rounded (Level 2)** shape language. This provides a b
 
 ### Status Badges (Chips)
 - Rounded-full (pill) shape. 
-- High-visibility colors with low-opacity backgrounds (e.g., Green text on Green-50 background) for "Human Verified" status.
+- High-visibility colors with low-opacity backgrounds (e.g., Green text on Green-50 background) for "Live recording confirmed" status.
 - Text: `label-md` uppercase for high-impact recognition.
 
 ### Audio Player

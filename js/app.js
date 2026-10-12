@@ -3287,7 +3287,7 @@ class SwapikiApp {
     const verifiedLine = (p && p.voiceVerified)
       ? 'The recording was captured live in one session, reading a random code that could not have been pre-recorded.'
       : 'Recording a live walkthrough so I can add a live-recording badge.';
-    return `Hi,\n\nHere's my verified proof-of-work profile on Swapiki \u2014 it has my project evidence and a 2-minute voice walkthrough.\n\n${verifiedLine}\n${shareUrl}\n\nThanks!`;
+    return `Hi,\n\nHere's my proof-of-work profile on Swapiki \u2014 it has my project evidence and a 2-minute voice walkthrough.\n\n${verifiedLine}\n${shareUrl}\n\nThanks!`;
   }
 
   /** Opens WhatsApp (app on mobile, web.whatsapp.com on desktop) with the share text pre-filled. */
@@ -3360,7 +3360,7 @@ class SwapikiApp {
   renderLandingView() {
     const profile = swapikiStore.getProfile();
     this.setPageMeta('Swapiki | 2 Minutes to a Confident Interview Decision',
-      'Swapiki turns resumes into 2-minute verified video statements hiring managers actually watch. Skip résumé rejections — hire for evidence, not formatting.');
+      'Swapiki turns resumes into 2-minute voice walkthroughs hiring managers actually watch. Skip résumé rejections — hire for evidence, not formatting.');
     this._loadLandingStats();
   }
 
@@ -4048,7 +4048,7 @@ const hasUrl = !!applyTarget;
             <span class="material-symbols-outlined text-3xl">lock</span>
           </div>
           <h1 class="text-2xl font-bold text-primary tracking-tight mb-2">Drafts unlock at 80%</h1>
-          <p class="text-sm text-slate-500 leading-relaxed mb-4">Resume drafts are built from your verified profile. Reach an 80%-complete proof profile to unlock them. You're at <strong>${score}%</strong>.</p>
+          <p class="text-sm text-slate-500 leading-relaxed mb-4">Resume drafts are built from your proof profile. Reach an 80%-complete proof profile to unlock them. You're at <strong>${score}%</strong>.</p>
           <button onclick="router.navigate('dashboard')" class="px-6 py-3 bg-primary text-white font-bold text-sm rounded-lg hover:bg-primary/90 transition-all shadow-md">Finish my profile</button>
         </div>`;
       return;
@@ -4380,7 +4380,7 @@ const hasUrl = !!applyTarget;
             <span class="material-symbols-outlined text-3xl">lock</span>
           </div>
           <h1 class="text-2xl font-bold text-primary tracking-tight mb-2">Interview prep unlocks at 80%</h1>
-          <p class="text-sm text-slate-500 leading-relaxed mb-4">Practice questions are built from your verified profile, projects and experience. Reach an 80%-complete profile to unlock them. You're at <strong>${score}%</strong>.</p>
+          <p class="text-sm text-slate-500 leading-relaxed mb-4">Practice questions are built from your proof profile, projects and experience. Reach an 80%-complete profile to unlock them. You're at <strong>${score}%</strong>.</p>
           <button onclick="router.navigate('dashboard')" class="px-6 py-3 bg-primary text-white font-bold text-sm rounded-lg hover:bg-primary/90 transition-all shadow-md">Finish my profile</button>
         </div>`;
       return;
@@ -6802,6 +6802,20 @@ if (statusDot) {
     // spoken-code check. It says the audio is not a replay, not who is speaking.
     this.applyVoiceVerifiedBadge(profile);
     this.applyProfileAttestation(profile);
+
+    // Sample/fictional profile notice: the built-in demo profile (the local
+    // default, id "ananya_sharma") is fiction used to show the format, so it
+    // must never read as a real, reviewed person. A real profile fetched by
+    // handle has a database UUID, never that id.
+    const sampleBanner = document.getElementById('sample-profile-banner');
+    if (sampleBanner) {
+      if (!this.publicUsername && profile && profile.id === 'ananya_sharma') {
+        sampleBanner.classList.remove('hidden');
+      } else {
+        sampleBanner.classList.add('hidden');
+      }
+    }
+
     document.getElementById('rec-expertise-text').textContent = Array.isArray(profile.expertise) && profile.expertise.length > 0
       ? profile.expertise.slice(0, 2).join(' & ')
       : (profile.expertise || "No skills listed yet");
@@ -6906,7 +6920,7 @@ if (statusDot) {
                     <div class="mb-4 p-3 bg-slate-100 text-slate-700 rounded-xl text-xs space-y-1 border border-slate-200">
                       <div class="flex items-center justify-between font-bold">
                         <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-sm">code</span> Repository Link</span>
-                        <span class="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded">Unverified</span>
+                        <span class="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded">Repo not linked</span>
                       </div>
                       <p class="text-[11px] text-slate-500 italic">No working public repository link provided for this project.</p>
                     </div>
@@ -6915,17 +6929,13 @@ if (statusDot) {
                 return `
                   <div class="mb-4 p-3 bg-slate-900 text-white rounded-xl text-xs space-y-2 shadow-sm">
                     <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-1.5 font-bold text-slate-200">
-                        <span class="material-symbols-outlined text-sm">code</span> GitHub Repository
-                      </div>
-                      <span class="bg-emerald-400/20 text-emerald-400 text-[10px] font-extrabold px-2 py-0.5 rounded border border-emerald-400/30 uppercase">Verified Repo</span>
+                      <span class="flex items-center gap-1.5 font-bold">
+                        <span class="material-symbols-outlined text-sm">code</span> Repository Link
+                      </span>
+                      <span class="bg-slate-700 text-slate-200 text-[10px] font-bold px-2 py-0.5 rounded">Candidate-submitted</span>
                     </div>
-                    <div class="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>⭐ 148 Stars</span>
-                      <span>🍴 34 Forks</span>
-                      <span>TypeScript</span>
-                    </div>
-                    <a href="${proj.githubUrl}" target="_blank" rel="noopener noreferrer" class="block text-center text-[11px] font-bold text-blue-300 hover:text-blue-200 underline pt-1 border-t border-slate-800">
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Link added by the candidate. Swapiki has not reviewed the code or confirmed the project is theirs.</p>
+                    <a href="${proj.githubUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
                       Inspect Public Code Base &rarr;
                     </a>
                   </div>
@@ -7253,7 +7263,7 @@ if (statusDot) {
 
   downloadPdfPortfolio() {
     const profile = swapikiStore.getProfile();
-    this.showToast(`Generating verified PDF portfolio for ${profile.name}...`);
+    this.showToast(`Generating your PDF portfolio for ${profile.name}...`);
 
     // Dynamic HTML Print Window for PDF Export
     const printWin = window.open('', '_blank');
@@ -7266,7 +7276,7 @@ if (statusDot) {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${profile.name} - Verified Swapiki Portfolio</title>
+        <title>${profile.name} - Swapiki Portfolio</title>
         <style>
           body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #0f172a; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.5; }
           .header { border-bottom: 2px solid #00236f; padding-bottom: 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
@@ -7290,16 +7300,16 @@ if (statusDot) {
             <h1 class="title">${profile.name}</h1>
             <p class="subtitle">${profile.title} • ${profile.experience} • ${profile.location}</p>
           </div>
-          <span class="badge">VERIFIED AUDIO PROOF ATTACHED</span>
+          <span class="badge">CANDIDATE-SUBMITTED PROOF · VOICE WALKTHROUGH ATTACHED</span>
         </div>
 
         <div class="section">
           <div class="section-title">ABOUT CANDIDATE</div>
-          <p style="font-size: 13px; color: #334155;">${profile.bio || 'Experienced product and engineering lead with a focus on scalable systems and verified candidate proof.'}</p>
+          <p style="font-size: 13px; color: #334155;">${profile.bio || 'Experienced product and engineering lead with a focus on scalable systems and candidate-submitted project proof.'}</p>
         </div>
 
         <div class="section">
-          <div class="section-title">VERIFIED PROOF PROJECTS & TECHNICAL IMPACT</div>
+          <div class="section-title">PROOF OF WORK (CANDIDATE-SUBMITTED)</div>
           ${profile.projects.map(p => `
             <div class="project-card">
               <h3 class="project-title">${p.title}</h3>
@@ -7309,13 +7319,13 @@ if (statusDot) {
                 <div class="impact-title">MEASURABLE IMPACT ACHIEVED</div>
                 <div class="impact-text">${p.impact}</div>
               </div>
-              <p style="font-size: 11px; color: #64748b; margin-top: 8px;"><strong>Voice Walkthrough Attached:</strong> ${p.audioDuration || '01:45'} Verified Speech</p>
+              <p style="font-size: 11px; color: #64748b; margin-top: 8px;"><strong>Voice Walkthrough Attached:</strong> ${p.audioDuration || '01:45'} \u2014 candidate-recorded and liveness-checked. This is not an identity check, and Swapiki does not verify that the work is the candidate's own.</p>
             </div>
           `).join('')}
         </div>
 
         <div class="footer">
-          Verified via Swapiki Audio-First Verification Platform • 100% Guaranteed Human Evaluation • ID: #IN-84092
+          Made with Swapiki — candidate-submitted proof and a live-recording-checked voice walkthrough. Swapiki does not verify identity, and nothing here is an identity, credential or background check.
         </div>
         <script>
           window.onload = function() { window.print(); }
@@ -7328,7 +7338,7 @@ if (statusDot) {
     printWin.document.close();
   }
 
-  /** Renders the live-recording check line under the dashboard "Verified Audio Evidence" metric. */
+  /** Renders the live-recording check line under the dashboard "Voice Walkthroughs" metric. */
   renderVoiceVerificationStatus(profile) {
     const el = document.getElementById('dash-voice-verify-status');
     if (!el) return;
