@@ -12,7 +12,13 @@
 //   in Supabase and the socket reconnects by itself (with an auto-reconnect on
 //   any drop, so a Render restart does not need a human).
 
-import makeWASocket, { DisconnectReason, initAuthCreds, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import makeWASocket, {
+  DisconnectReason,
+  initAuthCreds,
+  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
+  Browsers
+} from "@whiskeysockets/baileys";
 import { loadSession, saveSession } from "./session.js";
 
 /** Small auth-state adapter between Baileys' keyed signal store and our blob. */
@@ -50,48 +56,81 @@ export function createBot(db) {
   let stopped = false;
   let isOpen = false;
   let latestQr = null;
+  let latestQrAt = 0;
+  let lastUpdateAt = Date.now();
   let booting = null;
+  // The in-flight session write. A pairing "restart required" (515) arrives
+  // immediately after pair-success, so we must let this finish before
+  // reconnecting or the new socket loads creds without `me` and pairs again.
+  let pendingSave = Promise.resolve();
 
   /** The QR currently being offered, or null when already paired/connecting. */
   const qr = () => latestQr;
 
+  /** Age of the QR currently on offer, in ms (null when no QR is offered). */
+  const qrAgeMs = () => (latestQr ? Date.now() - latestQrAt : null);
+
   /** True when the socket has a live WhatsApp connection. */
   const connected = () => isOpen;
 
-  /** The current WA Web client version, or null (Baileys' bundled value) if unfetchable. */
-async function currentWaVersion() {
-  try {
-    const { version } = await fetchLatestBaileysVersion();
-    return Array.isArray(version) && version.length === 3 ? version : null;
-  } catch {
+  /**
+   * The WA Web client version to present. WhatsApp rejects a new-device link
+   * offered with a stale Web build ("Couldn't link device" on the phone), and
+   * Baileys' bundled `fetchLatestBaileysVersion()` goes stale for months.
+   * `fetchLatestWaWebVersion()` reads the live build straight from
+   * web.whatsapp.com/sw.js, which is what the phone actually checks against.
+   */
+  async function currentWaVersion() {
+    for (const fetchVersion of [fetchLatestWaWebVersion, fetchLatestBaileysVersion]) {
+      try {
+        const { version } = await fetchVersion();
+        if (Array.isArray(version) && version.length === 3) {
+          console.log(`[whatsapp] WA Web version ${version.join(".")} (${fetchVersion.name})`);
+          return version;
+        }
+      } catch (err) {
+        console.warn(`[whatsapp] ${fetchVersion.name} failed: ${err.message || err}`);
+      }
+    }
     return null;
   }
-}
 
-async function connect() {
+  function connect() {
     if (booting) return booting;
     booting = (async () => {
-      if (stopped) return;
+      if (stopped) return null;
+      lastUpdateAt = Date.now();
       const auth = await loadAuthState(db);
-      // WhatsApp periodically raises the minimum accepted Web client version; when
-      // Baileys' bundled number goes stale, the link handshake fails on the phone
-      // with "Couldn't link devices". Resolve the current version at boot so the
-      // QR offered is actually accepted by the phone.
       const version = await currentWaVersion();
       const socket = makeWASocket({
         version,
         auth: auth.state,
         printQRInTerminal: false,
-        browser: ["Swapiki Jobs", "Chrome", "Linux"],
+        // Format is [os, browser, osVersion]. A made-up first element (e.g. the
+        // app name) is not a real Web sub-platform and WhatsApp refuses to link
+        // it; use a valid desktop descriptor instead.
+        browser: Browsers.ubuntu("Chrome"),
+        // Re-issue the QR every 20s instead of the 60s default so a QR on
+        // screen is never more than a few seconds from WhatsApp's current ref.
+        qrTimeout: 20000,
         syncFullHistory: false,
         markOnlineOnConnect: false,
         keepAliveIntervalMs: 30000
       });
       sock = socket;
-      socket.ev.on("creds.update", auth.save);
+      socket.ev.on("creds.update", () => { pendingSave = auth.save(); });
       socket.ev.on("connection.update", async (update) => {
+        lastUpdateAt = Date.now();
         const { connection, lastDisconnect, qr: qrCode } = update;
-        if (typeof qrCode === "string" && qrCode.length > 0) latestQr = qrCode;
+        if (typeof qrCode === "string" && qrCode.length > 0) {
+          if (qrCode !== latestQr) console.log("[whatsapp] pairing QR issued");
+          latestQr = qrCode;
+          latestQrAt = Date.now();
+        } else if ("qr" in update && !qrCode && !isOpen) {
+          // Baileys explicitly clears the QR during (re)connect and after a
+          // successful pair. Stop serving the old one as if it were live.
+          latestQr = null;
+        }
         if (connection === "open") {
           isOpen = true;
           latestQr = null;
@@ -110,16 +149,40 @@ async function connect() {
             latestQr = null;
             await saveSession(db, { creds: {}, keys: {} }).catch(() => {});
           }
-          if (!stopped) {
-            // Wait a second so a crash-loop cannot spin the socket, then bring it
-            // back — keeps the digest sender ready through Render restarts.
-            setTimeout(() => { booting = null; connect().catch(() => {}); }, 1000);
-          }
+          if (stopped) return;
+          // Persist any just-issued creds first (see pendingSave), then bring
+          // the socket back — quickly for a 515 restart, gently otherwise so a
+          // crash-loop cannot spin the socket.
+          const delayMs = code === DisconnectReason.restartRequired ? 250 : 1000;
+          await pendingSave.catch(() => {});
+          setTimeout(() => { booting = null; connect().catch(() => {}); }, delayMs);
         }
       });
+      return socket;
     })();
+    // Let a failed boot be retried instead of pinning a rejected promise.
+    booting.catch(() => { booting = null; });
     return booting;
   }
+
+  // Watchdog: a half-open socket can stall without ever emitting "close",
+  // leaving the last QR frozen on the pairing page forever (and the phone
+  // rejecting it). If we are unpaired and nothing has moved for a while, tear
+  // the socket down and start a fresh pairing session.
+  const watchdog = setInterval(() => {
+    if (stopped || isOpen) return;
+    const idleMs = Date.now() - lastUpdateAt;
+    const qrStale = latestQr && Date.now() - latestQrAt > 90000;
+    if (idleMs > 90000 || qrStale) {
+      console.warn(`[whatsapp] watchdog: pairing idle ${Math.round(idleMs / 1000)}s - restarting socket`);
+      latestQr = null;
+      if (sock) { try { sock.end(new Error("stale pairing socket")); } catch { /* ignore */ } }
+      sock = null;
+      booting = null;
+      connect().catch(() => {});
+    }
+  }, 15000);
+  if (typeof watchdog.unref === "function") watchdog.unref();
 
   /** Waits until the socket is open, or false after `timeoutMs`. */
   async function waitOpen(timeoutMs) {
@@ -148,10 +211,11 @@ async function connect() {
   /** Closes the socket for good (shutdown path). */
   function stop() {
     stopped = true;
+    clearInterval(watchdog);
     if (sock) sock.end(new Error("service stopping"));
   }
 
   connect().catch((err) => console.error(`[whatsapp] boot failed: ${err.message || err}`));
 
-  return { qr, connected, sendText, waitOpen, stop };
+  return { qr, qrAgeMs, connected, sendText, waitOpen, stop };
 }

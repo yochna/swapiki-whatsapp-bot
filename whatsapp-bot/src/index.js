@@ -181,7 +181,13 @@ async function handle(request, cfg, bot) {
     return json({ ok: true, connected: bot.connected() });
   }
   if (url.pathname === "/status") {
-    return json({ ok: true, connected: bot.connected(), pairingQr: Boolean(bot.qr()), ts: new Date().toISOString() });
+    return json({
+      ok: true,
+      connected: bot.connected(),
+      pairingQr: Boolean(bot.qr()),
+      qrAgeMs: bot.qrAgeMs(),
+      ts: new Date().toISOString()
+    });
   }
   if (url.pathname === "/qr") {
     return json({ qr: bot.qr() || null });
@@ -202,15 +208,25 @@ async function handle(request, cfg, bot) {
         ? `<p>Connected to WhatsApp. The daily digest is live.</p>`
         : qr
           ? `<p>Scan this QR with the bot&#39;s WhatsApp number<br/>(Settings → Linked devices → Link a device).</p>` +
-            `<img src="${image}" alt="pairing QR" style="image-rendering: pixelated"/><p>Refresh after scanning.</p>`
-          : `<p>Waiting for a QR code from the WhatsApp connection…</p>`) +
+            `<img src="${image}" alt="pairing QR" style="image-rendering: pixelated"/>` +
+            `<p>This code refreshes automatically — scan the code shown right now. An old screenshot will not link.</p>`
+          : `<p>Preparing a fresh QR code… this page reloads by itself, no need to refresh.</p>`) +
       `</body></html>`;
-    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
   }
 
   if (url.pathname === "/send-digest" && request.method === "POST") {
+    if (!cfg.secret) {
+      return json({
+        error: "server not configured: WHATSAPP_SECRET is not set on the bot",
+        hint: "Set WHATSAPP_SECRET on this service (Render env var or .env) to the same value the scheduler sends."
+      }, 503);
+    }
     if (!secretMatches(request.headers.get("x-send-secret"), cfg.secret)) {
-      return json({ error: "unauthorized" }, 401);
+      return json({
+        error: "unauthorized: x-send-secret does not match this service's WHATSAPP_SECRET",
+        hint: "The scheduler Worker's WHATSAPP_SECRET must equal the bot's WHATSAPP_SECRET."
+      }, 401);
     }
     try {
       return json(await sendDigest(cfg, bot));
@@ -225,6 +241,12 @@ async function handle(request, cfg, bot) {
 }
 
 export async function run() {
+  // Node does not read a .env file on its own. Load it when present so a local
+  // `npm start` behaves like Render (which injects the vars itself); a missing
+  // file is not an error. Existing environment variables always win.
+  if (typeof process.loadEnvFile === "function") {
+    try { process.loadEnvFile(); } catch { /* no .env file present */ }
+  }
   const cfg = readConfig(process.env);
   const bot = createBot({ url: cfg.supabaseUrl, key: cfg.serviceKey || "" });
   logBoot(cfg);
