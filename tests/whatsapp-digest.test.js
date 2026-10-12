@@ -33,6 +33,8 @@ test('the whatsapp digest lists each job with a bold title and a tappable link',
   assert.ok(out.includes('1. *Senior React Developer*'), 'title must be bolded');
   assert.ok(out.includes('TechCorp India  ·  Bengaluru'), 'company/location separator matches the channel style');
   assert.ok(out.includes('💰 ₹24,00,000'));
+  assert.ok(out.includes('\nTechCorp India  ·  Bengaluru\n'), 'the company/location sits on its own line');
+  assert.ok(out.includes('\n💰 ₹24,00,000\n'), 'the salary sits on its own line');
   assert.ok(out.indexOf('https://swapiki.com/jobs/senior-react-developer') !== -1, 'the link must be on its own tappable line');
   assert.match(out, /👉 See all roles on Swapiki/);
   assert.match(out, /https:\/\/swapiki\.com\/#jobs/);

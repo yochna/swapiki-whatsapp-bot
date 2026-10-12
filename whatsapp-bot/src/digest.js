@@ -54,8 +54,12 @@ export function formatWhatsAppDigest(items) {
       .filter(Boolean)
       .join("  ·  ");
     const salary = plain(clip(job && job.salary, CAP.salary));
-    const parts = [`*${title}*`, where, salary ? `💰 ${salary}` : ""].filter(Boolean);
-    lines.push(`${i + 1}. ${parts.join("  ·  ")}`);
+    // One short line per field rather than one long  ·  -joined line: a phone is
+    // much narrower than desktop and a single long line runs past the edge of
+    // the message bubble instead of wrapping cleanly.
+    lines.push(`${i + 1}. *${title}*`);
+    if (where) lines.push(where);
+    if (salary) lines.push(`💰 ${salary}`);
     lines.push(String(url || ""));
     lines.push("");
   });
