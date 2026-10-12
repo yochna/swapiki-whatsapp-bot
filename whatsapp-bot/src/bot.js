@@ -262,6 +262,15 @@ export function createBot(db) {
     return isOpen;
   }
 
+  /** Lists the groups this account is in, so the digest JID can be copied from
+   *  /chats instead of guessed. */
+  async function listChats() {
+    const socket = sock;
+    if (!socket || !isOpen) throw new Error("Not connected yet. Scan the QR on the pairing page first.");
+    const groups = await socket.groupFetchAllParticipating().catch(() => ({}));
+    return Object.values(groups || {}).map((g) => ({ jid: g.id, name: g.subject || "", members: g.size ?? null }));
+  }
+
   /**
    * Sends one plain-text message to `jid` (a group ends in @g.us).
    *
@@ -285,5 +294,5 @@ export function createBot(db) {
 
   connect().catch((err) => console.error(`[whatsapp] boot failed: ${err.message || err}`));
 
-  return { qr, qrAgeMs, connected, usingProxy, lastDisconnect, sendText, waitOpen, reset, stop };
+  return { qr, qrAgeMs, connected, usingProxy, lastDisconnect, listChats, sendText, waitOpen, reset, stop };
 }

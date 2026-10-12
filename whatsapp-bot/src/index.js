@@ -233,6 +233,22 @@ async function handle(request, cfg, bot) {
     return json({ qr: bot.qr() || null });
   }
 
+  // Lists the groups the bot account is in so the digest target JID can be
+  // copied (ends in @g.us) instead of guessed. Secret-gated when a secret is set.
+  if (url.pathname === "/chats") {
+    if (cfg.secret) {
+      const supplied = request.headers.get("x-send-secret") || url.searchParams.get("token");
+      if (!secretMatches(supplied, cfg.secret)) {
+        return json({ error: "unauthorized: pass the x-send-secret header or ?token=" }, 401);
+      }
+    }
+    try {
+      return json({ chats: await bot.listChats() });
+    } catch (err) {
+      return json({ error: err.message }, 503);
+    }
+  }
+
   // Clears the stored session and restarts pairing, so a fresh QR is served.
   // Protected by the same secret as /send-digest (header or ?token=).
   if (url.pathname === "/reset") {
