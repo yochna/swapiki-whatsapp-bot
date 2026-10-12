@@ -125,15 +125,57 @@ if (Test-Path $localWrangler) {
   }
 }
 
+# 2c. Stage a clean upload directory. `wrangler pages deploy` has a HARDCODED
+#     ignore list (_worker.js, _redirects, _headers, _routes.json, functions,
+#     node_modules, .git, .wrangler, .DS_Store) and does NOT read .gitignore or
+#     .assetsignore. So `deploy .` would (a) fail on the >25 MiB raw media in
+#     video\ and (b) publish whatsapp-bot\.env, deploy.ps1, package.json and the
+#     markdown docs to the public internet. Mirror only the runtime files.
+Write-Host "-> Staging runtime files for upload..." -ForegroundColor Yellow
+$stage = Join-Path $env:TEMP "swapiki-pages-stage"
+if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+New-Item -ItemType Directory -Path $stage | Out-Null
+
+# VCS/tooling, other services, large media, and dev-only folders.
+$stageExcludeDirs = @(
+  ".git", ".wrangler", "node_modules",
+  "video", "whatsapp-bot",
+  "worker", "workers", "worker_setup",
+  "tests", "supabase", "scripts", "src"
+)
+# Secrets and repo/dev clutter that must never be web-served.
+$stageExcludeFiles = @(
+  ".env", ".dev.vars", ".gitignore", ".assetsignore",
+  "*.md", "*.ps1", "*.psm1", "*.cmd", "*.bat",
+  "package.json", "package-lock.json", "tailwind.config.js"
+)
+$robocopyArgs = @($PSScriptRoot, $stage, "/E", "/NFL", "/NDL", "/NJH", "/NJS", "/NP")
+$robocopyArgs += "/XD"; $robocopyArgs += $stageExcludeDirs
+$robocopyArgs += "/XF"; $robocopyArgs += $stageExcludeFiles
+
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+  & robocopy @robocopyArgs | Out-Null
+  $rc = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousPreference
+}
+# robocopy uses 0-7 as success bit flags; 8 and above mean a real failure.
+if ($rc -ge 8) { throw "robocopy failed while staging the upload (exit code $rc)." }
+$stagedCount = @(Get-ChildItem -LiteralPath $stage -Recurse -File).Count
+Write-Host "-> Staged $stagedCount runtime files (video\, whatsapp-bot\, node_modules\ and dev files excluded)." -ForegroundColor Green
+
 Write-Host "-> Deploying to project '$project' (branch: $branch)." -ForegroundColor Yellow
 if ($wrangler) {
-  Invoke-Native $wrangler "pages" "deploy" "." "--project-name" $project "--branch" $branch
+  Invoke-Native $wrangler "pages" "deploy" $stage "--project-name" $project "--branch" $branch
 } else {
   Write-Host "-> wrangler not found locally or globally; falling back to npx (needs network access)." -ForegroundColor Yellow
   $npx = Resolve-Native "npx"
   if (-not $npx) { throw "wrangler and npx are both unavailable - install wrangler with 'npm i -D wrangler'." }
-  Invoke-Native $npx "wrangler" "pages" "deploy" "." "--project-name" $project "--branch" $branch
+  Invoke-Native $npx "wrangler" "pages" "deploy" $stage "--project-name" $project "--branch" $branch
 }
+Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
 
 if ($Environment -eq "test") {
   Write-Host ""
