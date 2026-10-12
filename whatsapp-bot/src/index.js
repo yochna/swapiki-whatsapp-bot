@@ -188,27 +188,29 @@ async function sendDigest(cfg, bot) {
  */
 function startDailySchedule(cfg, bot) {
   let sending = false;
+  const runOnce = async (why) => {
+    if (sending) return;
+    sending = true;
+    try {
+      console.log(`[whatsapp] running ${why} digest for ${todayKey()}`);
+      console.log(`[whatsapp] ${why} digest result: ${JSON.stringify(await sendDigest(cfg, bot))}`);
+    } catch (err) {
+      console.error(`[whatsapp] ${why} digest failed: ${err.message || err}`);
+    } finally {
+      sending = false;
+    }
+  };
   const arm = () => {
     const now = new Date();
     const next = new Date(now);
     next.setHours(cfg.digestHour, 0, 0, 0);
     if (next <= now) next.setDate(next.getDate() + 1);
     console.log(`[whatsapp] next scheduled digest ${next.toString()} (in ${Math.round((next - now) / 60000)} min)`);
-    setTimeout(async () => {
-      if (!sending) {
-        sending = true;
-        try {
-          console.log(`[whatsapp] running scheduled digest for ${todayKey()}`);
-          console.log(`[whatsapp] scheduled digest result: ${JSON.stringify(await sendDigest(cfg, bot))}`);
-        } catch (err) {
-          console.error(`[whatsapp] scheduled digest failed: ${err.message || err}`);
-        } finally {
-          sending = false;
-        }
-      }
-      arm();
-    }, next - now).unref();
+    setTimeout(() => { runOnce("scheduled").finally(arm); }, next - now).unref();
   };
+  // Catch-up: if the PC was off at DIGEST_HOUR, send on the next startup that
+  // day. The day marker makes this a no-op when today's digest already went out.
+  setTimeout(() => runOnce("startup"), 15000).unref();
   arm();
 }
 
