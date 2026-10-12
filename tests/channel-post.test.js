@@ -137,6 +137,10 @@ test('formatChannelDigest links to our job pages and escapes hostile titles', ()
   ], 'in order: the two jobs, then the footer');
   assert.ok(!text.includes('evil.example"'), 'the injected URL must not become a second link');
   assert.match(text, /1\. /, 'the digest numbers its jobs');
+  // Each job is spread over short lines (title link, then company/location,
+  // then salary) so a narrow phone does not render one over-long line.
+  assert.match(text, /<\/a>\nAcme  ·  Bengaluru/, 'the company and location get their own line');
+  assert.match(text, /\n💰 20,00,000 &amp; stock/, 'the salary gets its own line');
 });
 
 test('formatChannelDigest still renders a header and footer with nothing to list', () => {

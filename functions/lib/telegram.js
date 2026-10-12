@@ -193,14 +193,15 @@ export function formatChannelDigest(items) {
       .map(esc)
       .join("  ·  ");
     const salary = clip(job && job.salary, CAP.salary);
-    const parts = [
-      `<a href="${esc(url)}"><b>${esc(title)}</b></a>`,
-      where,
-      salary ? `💰 ${esc(salary)}` : ""
-    ].filter(Boolean);
-    lines.push(`${i + 1}. ${parts.join("  ·  ")}`);
+    // One short line per field rather than one long  ·  -joined line: a phone
+    // client is much narrower than desktop, and a single long line runs past
+    // the edge of the message bubble instead of wrapping cleanly.
+    lines.push(`${i + 1}. <a href="${esc(url)}"><b>${esc(title)}</b></a>`);
+    if (where) lines.push(where);
+    if (salary) lines.push(`💰 ${esc(salary)}`);
+    lines.push("");
   });
-  lines.push("", `👉 <a href="${SITE_TARGET}">See all roles on Swapiki</a>`);
+  lines.push(`👉 <a href="${SITE_TARGET}">See all roles on Swapiki</a>`);
   return lines.join("\n");
 }
 
