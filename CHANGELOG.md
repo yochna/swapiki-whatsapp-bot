@@ -5,6 +5,25 @@ All notable changes along the path-to-Pilot run. Versioned by date following the
 
 ---
 
+## [0.8.72] · 2026-10-12 — The channel looks current
+
+The digest posted the OLDEST un-stamped roles first. The board publishes hundreds
+of roles a day and one message carries a handful, so the channel spent its daily
+post advertising roles from a week earlier. It now posts the NEWEST roles.
+
+- **Newest-first, with a freshness window.** `/channel-post` reads
+  `order=first_seen_at.desc`, bounded by `first_seen_at=gte.<now - 72h>`. A role
+  older than the window is stale by definition and is left un-stamped, so it drops
+  out of the query rather than being posted late — a backlog can no longer keep the
+  channel behind. The eight-role cap is unchanged: it is Telegram's 4096-char
+  limit, not policy. The WhatsApp digest mirrors the change.
+- **One short line per field.** Each role's title, company/location and salary now
+  sit on their own lines, instead of one long `·`-joined line that ran past the
+  edge of a phone's message bubble.
+- **Deploy stages only runtime files.** `deploy.ps1` copies the site into a temp
+  directory before `wrangler pages deploy`, so untracked large media (a 47 MB wav)
+  no longer fails the upload — and `whatsapp-bot/.env` is never published.
+
 ## [0.8.71] · 2026-10-08 — Telegram, four at a time
 
 The channel got one message per job, every two hours: a channel people mute. The

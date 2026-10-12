@@ -13,8 +13,11 @@ const CAP = { title: 200, company: 120, location: 120, salary: 120 };
 const SITE_TARGET = "https://swapiki.com/#jobs";
 
 // The digest is one message, so it cannot list a whole backfill day at once.
-// Anything cut here is still un-stamped, so the NEXT day's digest picks it up.
+// Anything cut here is still un-stamped, so a later digest can pick it up. The
+// window is how far back a role still counts as "new"; older un-stamped rows are
+// dropped rather than posted late.
 export const MAX_DIGEST_JOBS = 8;
+export const MAX_AGE_HOURS = 72;
 
 /** The UTC date key for "which digest is today's". */
 export const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -31,12 +34,17 @@ function plain(value) {
   return String(value == null ? "" : value).replace(/\*/g, "");
 }
 
-/** The PostgREST select for "published, not yet broadcast, oldest first". */
-export const pendingQuery = () =>
-  "jobs" +
-  "?select=id,title,company,location,category,salary,skills,apply_url,first_seen_at" +
-  "&status=eq.published&whatsapp_posted_at=is.null" +
-  "&order=first_seen_at.asc";
+/** The PostgREST select for "published, not yet broadcast, newest first, within the freshness window". */
+export const pendingQuery = () => {
+  const since = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000).toISOString();
+  return (
+    "jobs" +
+    "?select=id,title,company,location,category,salary,skills,apply_url,first_seen_at" +
+    "&status=eq.published&whatsapp_posted_at=is.null" +
+    `&first_seen_at=gte.${encodeURIComponent(since)}` +
+    "&order=first_seen_at.desc"
+  );
+};
 
 /**
  * Renders the daily digest: every job published since the previous post, in one

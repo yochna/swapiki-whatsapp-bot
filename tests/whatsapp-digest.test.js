@@ -106,10 +106,17 @@ test('the whatsapp service slugs match the live site jobSlug exactly', async () 
   }
 });
 
-test('the pending query targets published, unstamped jobs oldest-first', async () => {
-  const { pendingQuery } = await digestMod();
+test('the pending query targets published, unstamped jobs newest-first and fresh', async () => {
+  const { pendingQuery, MAX_AGE_HOURS } = await digestMod();
   const q = pendingQuery();
   assert.match(q, /status=eq\.published/);
   assert.match(q, /whatsapp_posted_at=is\.null/);
-  assert.match(q, /order=first_seen_at\.asc/);
+  // Newest first, so a backlog larger than the cap still surfaces the roles that
+  // just landed rather than the oldest head of the queue.
+  assert.match(q, /order=first_seen_at\.desc/);
+  // Bounded by a freshness window, so an ancient un-stamped tail is dropped.
+  const m = q.match(/first_seen_at=gte\.([^&]+)/);
+  assert.ok(m, 'the query must carry a first_seen_at lower bound');
+  const ageHours = (Date.now() - new Date(decodeURIComponent(m[1])).getTime()) / 3600000;
+  assert.ok(ageHours > MAX_AGE_HOURS - 0.1 && ageHours < MAX_AGE_HOURS + 0.1, `expected a ~${MAX_AGE_HOURS}h window, got ${ageHours}h`);
 });

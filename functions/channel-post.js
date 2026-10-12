@@ -1,7 +1,7 @@
 // Cloudflare Pages Function — Route: POST /channel-post
 //
-// Broadcasts everything published since the last post to the public Telegram
-// channel as ONE digest message per day.
+// Broadcasts the newest published roles to the public Telegram channel as ONE
+// digest message per day.
 //
 //   POST /channel-post
 //   x-ingest-secret: <INGEST_SECRET>       (required)
@@ -18,10 +18,18 @@
 // ONE POST A DAY, NOT ONE PER JOB
 //   The scheduler fires every two hours; posting every job on every run buries
 //   the channel. A digest row in channel_digests records the UTC day the post
-//   was made, and a row for today means today's digest is done — whatever is
-//   still un-stamped waits for tomorrow. A job is only eligible while
+//   was made, and a row for today means today's digest is done. A job is only
+//   eligible while
 //   channel_posted_at is null, and it is stamped when the digest that lists it
 //   is confirmed sent, so a retry cannot post the same day twice.
+//
+// THE NEWEST ROLES, NOT THE OLDEST BACKLOG
+//   The board publishes far more roles a day than one message can carry, so the
+//   digest takes the NEWEST un-stamped roles and ignores anything older than a
+//   freshness window. Draining a queue oldest-first would leave the channel
+//   advertising jobs from a week ago; a role past the window is stale by
+//   definition, so it is left un-stamped and simply drops out of the query
+//   rather than being posted late.
 //
 // ENV
 //   INGEST_SECRET           same secret the ingest route uses
@@ -45,10 +53,11 @@ const SITE = "https://swapiki.com";
 const POST_COLUMNS = "id,title,company,location,category,salary,skills,apply_url,first_seen_at";
 
 // The digest is one message, so it cannot list a whole backfill day at once.
-// The cap keeps the message comfortably inside Telegram's 4096-char limit, and
-// anything cut here is still un-stamped, so the NEXT day's digest picks it up.
-// Oldest-first means the channel reads in the order the jobs arrived.
+// The cap keeps the message comfortably inside Telegram's 4096-char limit; a
+// later digest picks up the newest of whatever was cut, and the window says how
+// far back a role can still count as "new".
 const MAX_DIGEST_JOBS = 8;
+const MAX_AGE_HOURS = 72;
 
 /** The UTC date key for "which digest is today's". */
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -69,6 +78,7 @@ export async function onRequestPost(context) {
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return json({ error: "SUPABASE_SERVICE_ROLE_KEY is not set." }, 503);
 
+  const since = new Date(Date.now() - MAX_AGE_HOURS * 3600 * 1000).toISOString();
   let rows;
   try {
     rows = await rest(
@@ -77,7 +87,8 @@ export async function onRequestPost(context) {
       "jobs" +
         `?select=${POST_COLUMNS}` +
         "&status=eq.published&channel_posted_at=is.null" +
-        "&order=first_seen_at.asc"
+        `&first_seen_at=gte.${encodeURIComponent(since)}` +
+        "&order=first_seen_at.desc"
     );
   } catch (err) {
     if (isMissingColumnError(err)) {

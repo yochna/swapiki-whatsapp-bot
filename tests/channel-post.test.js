@@ -281,6 +281,27 @@ test('a second run on the same day posts nothing and leaves jobs pending', async
   }
 });
 
+test('the publish queue is read newest-first and only within a freshness window', async () => {
+  const mod = await import(ROUTE);
+  const h = harness({ rows: [] });
+  try {
+    await mod.onRequestPost({ request: post(), env });
+    const read = h.supa.find(c => c.method === 'GET' && c.path.startsWith('jobs'));
+    // Newest first: the board publishes far more a day than one digest holds, so
+    // oldest-first would leave the channel showing week-old roles. The newest look
+    // current, which is the point of the channel.
+    assert.match(read.path, /order=first_seen_at\.desc/);
+    // And bounded by a freshness window, so the ancient tail is dropped rather
+    // than posted late.
+    const m = read.path.match(/first_seen_at=gte\.([^&]+)/);
+    assert.ok(m, 'the queue query must carry a first_seen_at lower bound');
+    const ageHours = (Date.now() - new Date(decodeURIComponent(m[1])).getTime()) / 3600000;
+    assert.ok(ageHours > 71.9 && ageHours < 72.1, `expected a ~72h window, got ${ageHours}h`);
+  } finally {
+    h.restore();
+  }
+});
+
 test('a day with nothing pending does not post an empty digest', async () => {
   const mod = await import(ROUTE);
   const h = harness({ rows: [] });
