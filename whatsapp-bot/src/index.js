@@ -50,6 +50,7 @@ function readConfig(env) {
     serviceKey: env.SUPABASE_SERVICE_ROLE_KEY,
     groupJid: env.WHATSAPP_GROUP_JID,
     secret: env.WHATSAPP_SECRET,
+    proxyUrl: env.WA_PROXY_URL || env.HTTPS_PROXY || env.https_proxy || "",
     port: Number(env.PORT) || 8787
   };
 }
@@ -66,6 +67,9 @@ function logBoot(cfg) {
   console.log(missing.length
     ? `[whatsapp] NOT configured for sends, missing: ${missing.join(", ")}`
     : "[whatsapp] configured for sends");
+  console.log(cfg.proxyUrl
+    ? "[whatsapp] routing the WhatsApp socket through WA_PROXY_URL"
+    : "[whatsapp] no proxy set — set WA_PROXY_URL if WhatsApp rejects this host's IP");
   console.log("[whatsapp] pairing page: GET / (QR is shown there until paired)");
 }
 
@@ -186,11 +190,30 @@ async function handle(request, cfg, bot) {
       connected: bot.connected(),
       pairingQr: Boolean(bot.qr()),
       qrAgeMs: bot.qrAgeMs(),
+      usingProxy: bot.usingProxy(),
+      lastDisconnectCode: bot.lastDisconnect(),
       ts: new Date().toISOString()
     });
   }
   if (url.pathname === "/qr") {
     return json({ qr: bot.qr() || null });
+  }
+
+  // Clears the stored session and restarts pairing, so a fresh QR is served.
+  // Protected by the same secret as /send-digest (header or ?token=).
+  if (url.pathname === "/reset") {
+    if (!cfg.secret) {
+      return json({ error: "not configured: WHATSAPP_SECRET must be set to authorize /reset" }, 503);
+    }
+    const supplied = request.headers.get("x-send-secret") || url.searchParams.get("token");
+    if (!secretMatches(supplied, cfg.secret)) {
+      return json({
+        error: "unauthorized: pass the x-send-secret header or ?token=",
+        hint: "Use the same WHATSAPP_SECRET the scheduler sends."
+      }, 401);
+    }
+    await bot.reset();
+    return json({ ok: true, reset: true, hint: "Open / for a fresh QR." });
   }
 
   if (url.pathname === "/") {
@@ -248,7 +271,7 @@ export async function run() {
     try { process.loadEnvFile(); } catch { /* no .env file present */ }
   }
   const cfg = readConfig(process.env);
-  const bot = createBot({ url: cfg.supabaseUrl, key: cfg.serviceKey || "" });
+  const bot = createBot({ url: cfg.supabaseUrl, key: cfg.serviceKey || "", proxyUrl: cfg.proxyUrl });
   logBoot(cfg);
 
   const server = (await import("node:http")).createServer((req, res) => {
