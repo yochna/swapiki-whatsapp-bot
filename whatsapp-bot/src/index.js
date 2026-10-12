@@ -51,6 +51,7 @@ function readConfig(env) {
     groupJid: env.WHATSAPP_GROUP_JID,
     secret: env.WHATSAPP_SECRET,
     proxyUrl: env.WA_PROXY_URL || env.HTTPS_PROXY || env.https_proxy || "",
+    digestHour: env.DIGEST_HOUR !== undefined && env.DIGEST_HOUR !== "" ? Number(env.DIGEST_HOUR) : null,
     port: Number(env.PORT) || 8787
   };
 }
@@ -178,6 +179,39 @@ async function sendDigest(cfg, bot) {
   return { posted: stamped, failed, remaining, alreadyPosted: false, day };
 }
 
+/**
+ * Optional self-scheduling: when DIGEST_HOUR is set (0-23, local time) the bot
+ * fires the digest itself once a day. This is the free path — run the bot on a
+ * home PC, where the residential IP links without a proxy, and it needs no
+ * Render host and no Cloudflare scheduler. Re-firing is harmless because the
+ * Supabase `whatsapp_digests` day marker prevents a second send for the same day.
+ */
+function startDailySchedule(cfg, bot) {
+  let sending = false;
+  const arm = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(cfg.digestHour, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    console.log(`[whatsapp] next scheduled digest ${next.toString()} (in ${Math.round((next - now) / 60000)} min)`);
+    setTimeout(async () => {
+      if (!sending) {
+        sending = true;
+        try {
+          console.log(`[whatsapp] running scheduled digest for ${todayKey()}`);
+          console.log(`[whatsapp] scheduled digest result: ${JSON.stringify(await sendDigest(cfg, bot))}`);
+        } catch (err) {
+          console.error(`[whatsapp] scheduled digest failed: ${err.message || err}`);
+        } finally {
+          sending = false;
+        }
+      }
+      arm();
+    }, next - now).unref();
+  };
+  arm();
+}
+
 async function handle(request, cfg, bot) {
   const url = new URL(request.url);
 
@@ -273,6 +307,12 @@ export async function run() {
   const cfg = readConfig(process.env);
   const bot = createBot({ url: cfg.supabaseUrl, key: cfg.serviceKey || "", proxyUrl: cfg.proxyUrl });
   logBoot(cfg);
+
+  if (cfg.digestHour !== null && Number.isInteger(cfg.digestHour) && cfg.digestHour >= 0 && cfg.digestHour <= 23) {
+    startDailySchedule(cfg, bot);
+  } else if (cfg.digestHour !== null) {
+    console.warn(`[whatsapp] DIGEST_HOUR="${cfg.digestHour}" is not an hour 0-23; self-scheduling is off`);
+  }
 
   const server = (await import("node:http")).createServer((req, res) => {
     req.on("data", () => {});
