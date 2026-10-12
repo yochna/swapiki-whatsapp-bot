@@ -249,6 +249,23 @@ async function handle(request, cfg, bot) {
     }
   }
 
+  // Resolves a WhatsApp Channel JID from its invite code (the part after
+  // whatsapp.com/channel/ in the channel's invite link), so a Channel can be
+  // used as the digest target. Secret-gated when a secret is set.
+  if (url.pathname === "/channel") {
+    if (cfg.secret) {
+      const supplied = request.headers.get("x-send-secret") || url.searchParams.get("token");
+      if (!secretMatches(supplied, cfg.secret)) {
+        return json({ error: "unauthorized: pass the x-send-secret header or ?token=" }, 401);
+      }
+    }
+    try {
+      return json(await bot.channelJid(url.searchParams.get("invite")));
+    } catch (err) {
+      return json({ error: err.message }, 503);
+    }
+  }
+
   // Clears the stored session and restarts pairing, so a fresh QR is served.
   // Protected by the same secret as /send-digest (header or ?token=).
   if (url.pathname === "/reset") {
@@ -264,6 +281,22 @@ async function handle(request, cfg, bot) {
     }
     await bot.reset();
     return json({ ok: true, reset: true, hint: "Open / for a fresh QR." });
+  }
+
+  // Sends one test message to the configured destination so a group/channel can
+  // be verified before the daily schedule. Secret-gated.
+  if (url.pathname === "/test-post" && request.method === "POST") {
+    if (!cfg.secret) return json({ error: "not configured: WHATSAPP_SECRET must be set" }, 503);
+    if (!secretMatches(request.headers.get("x-send-secret"), cfg.secret)) {
+      return json({ error: "unauthorized: x-send-secret does not match WHATSAPP_SECRET" }, 401);
+    }
+    if (!cfg.groupJid) return json({ error: "WHATSAPP_GROUP_JID is not set on this service." }, 503);
+    try {
+      await bot.sendText(cfg.groupJid, "Swapiki WhatsApp bot test — if you can read this, posting to the destination works.");
+      return json({ ok: true, sentTo: cfg.groupJid });
+    } catch (err) {
+      return json({ error: err.message }, 503);
+    }
   }
 
   if (url.pathname === "/") {

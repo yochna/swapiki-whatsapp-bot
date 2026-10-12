@@ -37,7 +37,8 @@ export function isMissingColumnError(err) {
  * @returns {Promise<any>}
  */
 export async function rest(supabaseUrl, serviceKey, path, init) {
-  const res = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+  const url = `${supabaseUrl}/rest/v1/${path}`;
+  const options = {
     ...init,
     headers: {
       apikey: serviceKey,
@@ -45,14 +46,29 @@ export async function rest(supabaseUrl, serviceKey, path, init) {
       "Content-Type": "application/json",
       ...((init && init.headers) || {})
     }
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Supabase ${init && init.method} ${path} -> ${res.status} ${body.slice(0, 180)}`);
+  };
+  // A home connection drops the occasional DNS/connection attempt; the session
+  // save sits right on the pairing restart, so a single blip there would throw
+  // the pairing away. Retry the network layer only — never an HTTP error we
+  // constructed below, which is a real answer and would just repeat.
+  const TRANSIENT = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|socket hang up|terminated/i;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Supabase ${init && init.method} ${path} -> ${res.status} ${body.slice(0, 180)}`);
+      }
+      if (res.status === 204) return null;
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      const transient = TRANSIENT.test(msg) && !/^Supabase /.test(msg);
+      if (!transient || attempt >= 4) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+    }
   }
-  if (res.status === 204) return null;
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
 }
 
 /** Does this error mean the table itself is missing? */

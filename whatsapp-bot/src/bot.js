@@ -26,7 +26,10 @@ const { HttpsProxyAgent } = httpsProxyAgent;
 
 /** Small auth-state adapter between Baileys' keyed signal store and our blob. */
 async function loadAuthState(db) {
-  const saved = await loadSession(db).catch(() => null);
+  const saved = await loadSession(db).catch((err) => {
+    console.warn(`[whatsapp] session load failed: ${err.message || err}${err.cause ? ` (${err.cause.message || err.cause})` : ""}`);
+    return null;
+  });
   // A fresh (or partial/corrupt) session has no keys: seeding the creds with
   // initAuthCreds() gives Baileys the noiseKey/identityKey/signedPreKey it will
   // need for the very first handshake. Without it creds.noiseKey is undefined
@@ -49,7 +52,8 @@ async function loadAuthState(db) {
   return {
     state: { creds, keys },
     save: async () => {
-      await saveSession(db, { creds, keys: Object.fromEntries(map) }).catch(() => {});
+      await saveSession(db, { creds, keys: Object.fromEntries(map) })
+        .catch((err) => console.warn(`[whatsapp] session save failed: ${err.message || err}${err.cause ? ` (${err.cause.message || err.cause})` : ""}`));
     }
   };
 }
@@ -271,6 +275,20 @@ export function createBot(db) {
     return Object.values(groups || {}).map((g) => ({ jid: g.id, name: g.subject || "", members: g.size ?? null }));
   }
 
+  /** Resolves a WhatsApp Channel (newsletter) JID from the invite code in its
+   *  invite link (https://whatsapp.com/channel/<CODE>), since channels are not
+   *  returned by groupFetchAllParticipating. */
+  async function channelJid(inviteCode) {
+    const socket = sock;
+    if (!socket || !isOpen) throw new Error("Not connected yet. Scan the QR on the pairing page first.");
+    const code = String(inviteCode || "").trim();
+    if (!code) throw new Error('Missing invite code. Use /channel?invite=<code>.');
+    const meta = await socket.newsletterMetadata("invite", code);
+    const jid = meta && meta.id;
+    if (!jid || !/@newsletter$/.test(jid)) throw new Error(`Could not resolve a channel from invite "${code}".`);
+    return { jid, name: meta.name || "", subscribers: meta.subscribers ?? null };
+  }
+
   /**
    * Sends one plain-text message to `jid` (a group ends in @g.us).
    *
@@ -294,5 +312,5 @@ export function createBot(db) {
 
   connect().catch((err) => console.error(`[whatsapp] boot failed: ${err.message || err}`));
 
-  return { qr, qrAgeMs, connected, usingProxy, lastDisconnect, listChats, sendText, waitOpen, reset, stop };
+  return { qr, qrAgeMs, connected, usingProxy, lastDisconnect, listChats, channelJid, sendText, waitOpen, reset, stop };
 }
