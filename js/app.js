@@ -40,6 +40,15 @@ const ADMIN_PAGE_SIZE = 15;
  *  from the one they are held to. */
 const DAILY_TOOL_JOB_LIMIT = 5;
 
+/** How many listings the public board paints before it offers "Show more".
+ *
+ *  The board is several thousand rows; rendering every card into one innerHTML
+ *  on arrival blocks the main thread for seconds and the visitor stares at a
+ *  frozen page (the server-rendered list is replaced wholesale by the SPA, so
+ *  there is nothing to interact with until it finishes). A first batch paints in
+ *  one frame and the rest arrive on request. */
+const JOBS_PAGE_SIZE = 40;
+
 class Router {
   constructor() {
     this.currentView = 'landing';
@@ -283,6 +292,13 @@ class SwapikiApp {
       // the /config function before anything reads database credentials.
       await swapikiStore.applyConfig();
 
+      // First-touch referral capture: if this visit arrived through an invite
+      // link (swapiki.com/?ref=<username>), remember the handle now so it can be
+      // attributed once the visitor actually creates an account.
+      if (typeof swapikiStore.captureReferralFromUrl === 'function') {
+        swapikiStore.captureReferralFromUrl();
+      }
+
       // Heavy third-party loaders only matter on production: Google Sign-In
       // (works on swapiki.com; its origins aren't allow-listed on *.pages.dev)
       // and PostHog analytics (keeps real usage data clean of test noise and
@@ -318,6 +334,11 @@ class SwapikiApp {
         ev.preventDefault();
         this._openTelegramDeepLink(btn);
       });
+
+      // Profile badge popups open on hover/focus via CSS alone. Touch screens
+      // have no hover, and iOS won't focus a bare <span>, so a tap toggles them
+      // too — and a tap anywhere else dismisses the open one.
+      this.initBadgeTooltips();
 
       // Bring this account's "what did you do" notes down onto the device, and
       // push anything only this device has. Fire-and-forget: a slow or missing
@@ -899,8 +920,105 @@ class SwapikiApp {
     `;
   }
 
+  /**
+   * The open profile-report queue — the discovery half of the fraud response.
+   *
+   * A report names a candidate_id; the candidate's name and handle come from the
+   * already-fetched list (this._adminCandidatesCache), so a report never needs a
+   * second read. Every field is escaped: a reason label, the free-text details and
+   * the reporter's own email are all attacker-influenced. Acting on a report
+   * freezes the profile (status 'suspended' via adminSetProfileStatus) and marks
+   * the report actioned; a dismissal just resolves the report.
+   */
+  adminReportsSection(reports) {
+    const list = reports || [];
+    const byId = new Map((this._adminCandidatesCache || []).map(c => [c.id, c]));
+    const reasonLabel = {
+      scam: 'Scam / fraud',
+      impersonation: 'Fake person',
+      stolen_work: 'Stolen work',
+      contact: 'Money / off-platform contact',
+      spam: 'Spam',
+      other: 'Other'
+    };
+    const rowDelay = i => `animation-delay:${Math.min(i * 0.03, 0.3)}s`;
+
+    const rows = list.map((r, i) => {
+      const c = byId.get(r.candidate_id) || {};
+      return `
+        <tr class="admin-row-fade border-b border-slate-100 last:border-0 hover:bg-rose-50/40 transition-colors align-top" style="${rowDelay(i)}">
+          <td class="py-3 px-3 text-xs text-slate-400 whitespace-nowrap">${swapikiStore.timeAgo(r.created_at)}</td>
+          <td class="py-3 px-3">
+            <button onclick="app.adminViewCandidateProfile(this.dataset.username)" data-username="${this.escapeHtml(c.username || '')}"
+              class="text-sm font-bold text-slate-800 hover:text-primary hover:underline" ${!c.username ? 'disabled' : ''}>${this.escapeHtml(c.name || '(no name)')}</button>
+            <div class="text-xs text-slate-400">${c.username ? '@' + this.escapeHtml(c.username) : '—'}</div>
+          </td>
+          <td class="py-3 px-3 whitespace-nowrap">
+            <span class="inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">${this.escapeHtml(reasonLabel[r.reason] || r.reason || 'Report')}</span>
+          </td>
+          <td class="py-3 px-3 text-sm text-slate-700 max-w-md whitespace-pre-line">${this.escapeHtml(r.details || '')}</td>
+          <td class="py-3 px-3 text-xs text-slate-400 break-all max-w-[12rem]">${this.escapeHtml(r.reporter_email || '—')}</td>
+          <td class="py-3 px-3 text-right whitespace-nowrap">
+            ${r.candidate_id ? `<button onclick="app.adminSuspendReportedProfile(this.dataset.id, this.dataset.report)" data-id="${this.escapeHtml(r.candidate_id)}" data-report="${this.escapeHtml(r.id)}" title="Suspend and mark actioned"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90 transition-all">
+              <span class="material-symbols-outlined text-lg">block</span></button>` : ''}
+            <button onclick="app.adminResolveReport(this.dataset.id, 'dismissed')" data-id="${this.escapeHtml(r.id)}" title="Dismiss"
+              class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 active:scale-90 transition-all">
+              <span class="material-symbols-outlined text-lg">done</span></button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    const cards = list.map((r, i) => {
+      const c = byId.get(r.candidate_id) || {};
+      return `
+        <div class="admin-row-fade border border-rose-100 rounded-xl bg-white shadow-sm p-3.5" style="${rowDelay(i)}">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="inline-flex items-center text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">${this.escapeHtml(reasonLabel[r.reason] || r.reason || 'Report')}</span>
+            <span class="text-xs text-slate-400">${swapikiStore.timeAgo(r.created_at)}</span>
+          </div>
+          <button onclick="app.adminViewCandidateProfile(this.dataset.username)" data-username="${this.escapeHtml(c.username || '')}"
+            class="text-sm font-bold text-slate-800 ${c.username ? 'hover:text-primary hover:underline' : ''}" ${!c.username ? 'disabled' : ''}>${this.escapeHtml(c.name || '(no name)')}</button>
+          <p class="text-sm text-slate-700 whitespace-pre-line mt-1">${this.escapeHtml(r.details || '')}</p>
+          ${r.reporter_email ? `<p class="text-xs text-slate-400 mt-1.5 break-all">${this.escapeHtml(r.reporter_email)}</p>` : ''}
+          <div class="mt-3 flex gap-2">
+            ${r.candidate_id ? `<button onclick="app.adminSuspendReportedProfile(this.dataset.id, this.dataset.report)" data-id="${this.escapeHtml(r.candidate_id)}" data-report="${this.escapeHtml(r.id)}"
+              class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold text-rose-700 bg-rose-50 active:scale-[0.97] transition-all">
+              <span class="material-symbols-outlined text-base">block</span> Suspend</button>` : ''}
+            <button onclick="app.adminResolveReport(this.dataset.id, 'dismissed')" data-id="${this.escapeHtml(r.id)}"
+              class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold text-slate-600 bg-slate-100 active:scale-[0.97] transition-all">
+              <span class="material-symbols-outlined text-base">done</span> Dismiss</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="admin-fade-in mb-8">
+        ${this.adminSectionHeader('Reported profiles', list.length, 'flag')}
+        <div class="hidden md:block overflow-x-auto border border-rose-100 rounded-xl bg-white shadow-sm">
+          <table class="w-full">
+            <thead class="bg-rose-50/60 sticky top-0">
+              <tr>
+                <th class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">When</th>
+                <th class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">Profile</th>
+                <th class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">Reason</th>
+                <th class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">What they saw</th>
+                <th class="text-left text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">Reporter</th>
+                <th class="text-right text-[11px] font-bold uppercase tracking-wide text-slate-500 py-2.5 px-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>${rows || this.adminEmptyState(6, 'flag', 'No open reports. Nothing to review right now.')}</tbody>
+          </table>
+        </div>
+        <div class="md:hidden space-y-2.5">
+          ${cards || `<div class="border border-slate-200 rounded-xl bg-white p-8 text-center"><span class="material-symbols-outlined text-3xl text-slate-300 block mb-2">flag</span><span class="text-sm text-slate-400">No open reports.</span></div>`}
+        </div>
+      </div>
+    `;
+  }
+
   async renderAdminDashboard() {
-    // A full admin render is six queries, four charts and every candidate, admin,
+    // A full admin render is seven queries, four charts and every candidate, admin,
     // feedback row and job row on the page. Two of them running at once is what
     // made a click feel like it had been ignored, so a request that arrives while
     // one is open does not start a second: it asks for one more pass afterwards
@@ -938,13 +1056,14 @@ class SwapikiApp {
     container.innerHTML = this.renderAdminDashboardSkeleton();
 
     try {
-      const [candidates, admins, stats, timeStats, feedback, jobs] = await Promise.all([
+      const [candidates, admins, stats, timeStats, feedback, jobs, reports] = await Promise.all([
         swapikiStore.adminListCandidates(),
         swapikiStore.adminListAdmins(),
         swapikiStore.adminGetStats().catch(() => null),
         swapikiStore.adminGetTimeStats().catch(() => ({ configured: false })),
         swapikiStore.adminListFeedback().catch(() => []),
-        swapikiStore.adminListJobs().catch(() => [])
+        swapikiStore.adminListJobs().catch(() => []),
+        swapikiStore.adminListProfileReports().catch(() => [])
       ]);
 
       // The queue becomes the in-memory copy the review tables repaint from, so
@@ -1036,6 +1155,8 @@ class SwapikiApp {
           </div>
           <div id="admin-candidates-pager">${this.adminPager('candidates', candidatePage)}</div>
         </div>
+
+        ${this.adminReportsSection(reports)}
 
         <div class="admin-fade-in mb-8">
           ${this.adminSectionHeader('Feedback', feedback.length, 'edit_note')}
@@ -1162,19 +1283,6 @@ class SwapikiApp {
     }
   }
 
-  /** Human "Reviewed by Swapiki team" toggle — only ever set by a person. */
-  async adminToggleStaffReview(candidateId, markReviewed) {
-    try {
-      await swapikiStore.adminSetStaffReview(candidateId, markReviewed);
-      this.showToast(markReviewed
-        ? 'Marked as reviewed by the Swapiki team — trust badge now shows on their public profile.'
-        : 'Review mark removed.');
-      this.renderAdminDashboard();
-    } catch (err) {
-      this.showToast(`❌ ${(err && err.message) || 'Could not update review status.'}`);
-    }
-  }
-
   async adminDeleteCandidate(candidateId, candidateName) {
     if (!confirm(`Permanently delete "${candidateName || 'this candidate'}"? This cannot be undone.`)) return;
     try {
@@ -1183,6 +1291,46 @@ class SwapikiApp {
       this.renderAdminDashboard();
     } catch (err) {
       this.showToast(`❌ ${(err && err.message) || 'Could not delete candidate.'}`);
+    }
+  }
+
+  /**
+   * Resolve one profile report. Kept separate from the candidate actions because
+   * a report is dismissed on its own — the profile may well be fine — whereas the
+   * unpublish action below touches the profile too.
+   */
+  async adminResolveReport(reportId, status) {
+    try {
+      await swapikiStore.adminResolveProfileReport(reportId, status);
+      this.showToast(status === 'actioned' ? 'Report marked actioned.' : 'Report dismissed.');
+      this.renderAdminDashboard();
+    } catch (err) {
+      this.showToast(`❌ ${(err && err.message) || 'Could not update the report.'}`);
+    }
+  }
+
+  /**
+   * Act on a report: suspend (freeze) the profile, then resolve the report.
+   *
+   * 'suspended' rather than 'draft' so a takedown is distinguishable from an
+   * unfinished draft — and, unlike a plain unpublish, a candidate cannot flip it
+   * back to published themselves (supabase/suspend_migration.sql holds the status
+   * until an admin restores it).
+   *
+   * The suspend runs first and is the one that must succeed — a resolved report on
+   * a still-live scam would be the worst outcome, so a failed resolve is swallowed
+   * rather than reported as success.
+   */
+  async adminSuspendReportedProfile(candidateId, reportId) {
+    try {
+      await swapikiStore.adminSetProfileStatus(candidateId, 'suspended');
+      if (reportId) {
+        try { await swapikiStore.adminResolveProfileReport(reportId, 'actioned'); } catch (e) { /* best-effort */ }
+      }
+      this.showToast('Profile suspended and report marked actioned.');
+      this.renderAdminDashboard();
+    } catch (err) {
+      this.showToast(`❌ ${(err && err.message) || 'Could not suspend the profile.'}`);
     }
   }
 
@@ -1559,8 +1707,8 @@ class SwapikiApp {
         <td class="py-3 px-3 text-sm text-slate-500 whitespace-nowrap">${this.escapeHtml(c.email || '—')}</td>
         <td class="py-3 px-3 text-sm text-slate-500 whitespace-nowrap">${this.escapeHtml(c.phone || '—')}</td>
         <td class="py-3 px-3">
-          <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">
-            <span class="w-1.5 h-1.5 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+          <span class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-50 text-emerald-700' : (c.profile_status === 'suspended' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600')}">
+            <span class="w-1.5 h-1.5 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-500' : (c.profile_status === 'suspended' ? 'bg-rose-500' : 'bg-slate-400')}"></span>
             ${this.escapeHtml(c.profile_status || 'draft')}
           </span>
           <span title="${c.voice_verified ? 'Recording confirmed live: the candidate read a random code into a microphone. This is not an identity check.' : 'No confirmed live recording yet - useful spam triage signal'}"
@@ -1568,20 +1716,11 @@ class SwapikiApp {
             <span class="material-symbols-outlined text-[12px]">${c.voice_verified ? 'verified' : 'record_voice_over'}</span>
             ${c.voice_verified ? 'Live recording confirmed' : (c.voice_verification_count >= 3 && !c.voice_verified ? 'Flagged (3+ fails)' : (c.voice_verification_count ? `${c.voice_verification_count} attempt${c.voice_verification_count === 1 ? '' : 's'}, not confirmed` : 'No recording check'))}
           </span>
-          <span title="Set ONLY by a human on the Swapiki team (admin → Mark reviewed). Lights up the 'Reviewed by Swapiki team' badge on the public profile. Never set automatically."
-            class="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full mt-1 ${c.staff_reviewed_at ? 'bg-sky-50 text-sky-700' : 'bg-slate-50 text-slate-400'}">
-            <span class="material-symbols-outlined text-[12px]">${c.staff_reviewed_at ? 'verified_user' : 'fact_check'}</span>
-            ${c.staff_reviewed_at ? 'Reviewed by Swapiki team' : 'Unreviewed'}
-          </span>
         </td>
         <td class="py-3 px-3 text-right whitespace-nowrap">
-          <button onclick="app.adminToggleStaffReview('${c.id}', ${c.staff_reviewed_at ? 'false' : 'true'})" title="${c.staff_reviewed_at ? 'Remove the Swapiki team review mark' : 'Mark as reviewed by Swapiki team — shows the public trust badge'}"
-            class="inline-flex items-center justify-center w-8 h-8 rounded-lg ${c.staff_reviewed_at ? 'text-sky-600 hover:bg-sky-50' : 'text-slate-400 hover:text-sky-700 hover:bg-sky-50'} active:scale-90 transition-all">
-            <span class="material-symbols-outlined text-lg">${c.staff_reviewed_at ? 'verified_user' : 'fact_check'}</span>
-          </button>
-          <button onclick="app.adminTogglePublish('${c.id}', '${c.profile_status}')" title="${c.profile_status === 'published' ? 'Unpublish' : 'Publish'}"
+          <button onclick="app.adminTogglePublish('${c.id}', '${c.profile_status}')" title="${c.profile_status === 'published' ? 'Unpublish' : (c.profile_status === 'suspended' ? 'Restore' : 'Publish')}"
             class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-primary hover:bg-primary-fixed active:scale-90 transition-all">
-            <span class="material-symbols-outlined text-lg">${c.profile_status === 'published' ? 'visibility_off' : 'visibility'}</span>
+            <span class="material-symbols-outlined text-lg">${c.profile_status === 'published' ? 'visibility_off' : (c.profile_status === 'suspended' ? 'restart_alt' : 'visibility')}</span>
           </button>
           <button onclick="app.adminDeleteCandidate(this.dataset.id, this.dataset.name)" data-id="${this.escapeHtml(c.id || '')}" data-name="${this.escapeHtml(c.name || '')}" title="Delete"
             class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90 transition-all">
@@ -1601,8 +1740,8 @@ class SwapikiApp {
               <div class="text-xs text-slate-400 truncate">${c.username ? '@' + this.escapeHtml(c.username) : '—'}</div>
             </div>
           </button>
-          <span class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${c.profile_status === 'published' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">
-            <span class="w-1.5 h-1.5 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+          <span class="inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${c.profile_status === 'published' ? 'bg-emerald-50 text-emerald-700' : (c.profile_status === 'suspended' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600')}">
+            <span class="w-1.5 h-1.5 rounded-full ${c.profile_status === 'published' ? 'bg-emerald-500' : (c.profile_status === 'suspended' ? 'bg-rose-500' : 'bg-slate-400')}"></span>
             ${this.escapeHtml(c.profile_status || 'draft')}
           </span>
         </div>
@@ -1613,15 +1752,10 @@ class SwapikiApp {
           <span class="text-slate-600 text-right truncate">${this.escapeHtml(c.phone || '—')}</span>
         </div>
         <div class="mt-3 flex gap-2">
-          <button onclick="app.adminToggleStaffReview('${c.id}', ${c.staff_reviewed_at ? 'false' : 'true'})"
-            class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold ${c.staff_reviewed_at ? 'text-sky-700 bg-sky-50' : 'text-slate-600 bg-slate-100'} active:scale-[0.97] transition-all">
-            <span class="material-symbols-outlined text-base">${c.staff_reviewed_at ? 'verified_user' : 'fact_check'}</span>
-            ${c.staff_reviewed_at ? 'Reviewed ✓' : 'Mark reviewed'}
-          </button>
           <button onclick="app.adminTogglePublish('${c.id}', '${c.profile_status}')"
             class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold text-primary bg-primary-fixed active:scale-[0.97] transition-all">
-            <span class="material-symbols-outlined text-base">${c.profile_status === 'published' ? 'visibility_off' : 'visibility'}</span>
-            ${c.profile_status === 'published' ? 'Unpublish' : 'Publish'}
+            <span class="material-symbols-outlined text-base">${c.profile_status === 'published' ? 'visibility_off' : (c.profile_status === 'suspended' ? 'restart_alt' : 'visibility')}</span>
+            ${c.profile_status === 'published' ? 'Unpublish' : (c.profile_status === 'suspended' ? 'Restore' : 'Publish')}
           </button>
           <button onclick="app.adminDeleteCandidate(this.dataset.id, this.dataset.name)" data-id="${this.escapeHtml(c.id || '')}" data-name="${this.escapeHtml(c.name || '')}"
             class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold text-rose-600 bg-rose-50 active:scale-[0.97] transition-all">
@@ -2924,6 +3058,9 @@ class SwapikiApp {
       const fullName = user.user_metadata && user.user_metadata.full_name;
       el.textContent = fullName ? fullName.split(' ')[0] : (user.email || '').split('@')[0];
     });
+    // Keep the landing invite banner in step with auth: shown to a fresh invited
+    // visitor, gone the moment they sign in.
+    this.maybeShowInviteBanner();
   }
 
   /** (Re)initializes the Google Sign-In buttons — safe to call repeatedly since the GSI script loads async. */
@@ -3161,6 +3298,61 @@ class SwapikiApp {
   }
 
   /**
+   * Profile badge popups open on hover and on keyboard focus through CSS. A
+   * mouse hovers fine, but touch screens have no hover and iOS won't focus a
+   * bare <span>, so a tap/click (or Enter/Space when focused) toggles the same
+   * popup here. Only one is ever open, and a tap/key anywhere else closes it.
+   */
+  initBadgeTooltips() {
+    if (this._badgeTipsBound) return;
+    this._badgeTipsBound = true;
+
+    document.addEventListener('click', (ev) => {
+      const badge = ev.target && ev.target.closest ? ev.target.closest('.group[tabindex]') : null;
+      if (badge && badge.querySelector('[role="tooltip"]')) {
+        ev.preventDefault();
+        this.toggleBadgeTooltip(badge);
+        return;
+      }
+      this.closeBadgeTooltips();
+    });
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      const active = document.activeElement;
+      const badge = active && active.closest ? active.closest('.group[tabindex]') : null;
+      if (badge && badge.querySelector('[role="tooltip"]')) {
+        ev.preventDefault();
+        this.toggleBadgeTooltip(badge);
+      }
+    });
+  }
+
+  toggleBadgeTooltip(badge) {
+    const tip = badge.querySelector('[role="tooltip"]');
+    if (!tip) return;
+    const isOpen = badge.getAttribute('data-tip-open') === '1';
+    this.closeBadgeTooltips();
+    if (!isOpen) {
+      tip.style.visibility = 'visible';
+      tip.style.opacity = '1';
+      badge.setAttribute('data-tip-open', '1');
+    }
+  }
+
+  closeBadgeTooltips() {
+    document.querySelectorAll('[data-tip-open="1"]').forEach((badge) => {
+      const tip = badge.querySelector('[role="tooltip"]');
+      if (tip) {
+        tip.style.visibility = '';
+        tip.style.opacity = '';
+      }
+      badge.removeAttribute('data-tip-open');
+      if (document.activeElement === badge) badge.blur();
+    });
+  }
+
+  /**
    * SPA-safe per-page title/description + social meta. index.html carries the
    * static home defaults; any view that has its own story (candidate profile,
    * dashboard, not-found) calls this so the browser tab, share cards, and
@@ -3313,6 +3505,108 @@ class SwapikiApp {
     this.closeShareModal();
   }
 
+  // ---- Share a single job listing ---------------------------------------
+  // The board shows listings to everyone, so sharing a job is not gated on
+  // sign-in. The canonical /jobs/<id> URL is the same page the server-rendered
+  // share row (functions/lib/share.js) points at - idFromSlug accepts a bare
+  // uuid - so a link shared from here always resolves.
+
+  _shareJobSubject() {
+    return Array.isArray(this._jobsCache) ? this._jobsCache.find(j => j.id === this._shareJobId) : null;
+  }
+
+  jobShareUrl(job) {
+    return `https://swapiki.com/jobs/${encodeURIComponent(job.id)}`;
+  }
+
+  jobShareText(job) {
+    const role = job.title || 'Job opening';
+    const at = job.company ? ` at ${job.company}` : '';
+    const where = job.location ? ` \u00b7 ${job.location}` : '';
+    return `${role}${at}${where} \u2014 on Swapiki Jobs`;
+  }
+
+  buildJobShareCardHtml(job) {
+    const type = this._jobType(job);
+    const mode = this._jobMode(job);
+    const typeBadge = `<span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${type === 'internship' ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${type === 'internship' ? 'Internship' : 'Job'}</span>`;
+    const modeBadge = `<span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${mode === 'remote' ? 'bg-sky-50 text-sky-700 border border-sky-200' : mode === 'hybrid' ? 'bg-violet-50 text-violet-700 border border-violet-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}">${mode === 'remote' ? 'Remote / WFH' : mode === 'hybrid' ? 'Hybrid' : 'Onsite'}</span>`;
+    return `
+      <div class="border border-slate-200 rounded-2xl bg-gradient-to-br from-slate-50 to-white p-4 shadow-sm">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-primary">Swapiki Jobs</p>
+        <div class="text-sm font-bold text-slate-900 mt-1">${this.escapeHtml(job.title || '')}</div>
+        <p class="text-xs text-slate-500 mt-0.5">${this.escapeHtml(job.company || '')}${job.location ? ' \u00b7 ' + this.escapeHtml(job.location) : ''}</p>
+        <div class="flex flex-wrap gap-1.5 mt-2">${typeBadge}${modeBadge}</div>
+      </div>`;
+  }
+
+  openJobShareModal(jobId) {
+    const job = Array.isArray(this._jobsCache) ? this._jobsCache.find(j => j.id === jobId) : null;
+    if (!job) return;
+    if (window.posthog && typeof window.posthog.capture === 'function') {
+      try { window.posthog.capture('job_share_open', { job_id: jobId, title: job.title || '', company: job.company || '' }); } catch (e) {}
+    }
+    this._shareJobId = jobId;
+    const urlLabel = document.getElementById('share-job-url');
+    if (urlLabel) urlLabel.textContent = this.jobShareUrl(job);
+    const preview = document.getElementById('share-job-preview');
+    if (preview) preview.innerHTML = this.buildJobShareCardHtml(job);
+    const modal = document.getElementById('modal-share-job');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  closeJobShareModal() {
+    const modal = document.getElementById('modal-share-job');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  /** Off-site intents built from OUR canonical job URL, never visitor input. */
+  shareJobVia(channel) {
+    const job = this._shareJobSubject();
+    if (!job) return;
+    const eu = encodeURIComponent(this.jobShareUrl(job));
+    const et = encodeURIComponent(this.jobShareText(job));
+    const targets = {
+      x: `https://twitter.com/intent/tweet?text=${et}&url=${eu}`,
+      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${eu}`,
+      whatsapp: `https://wa.me/?text=${et}%20${eu}`,
+      email: `mailto:?subject=${et}&body=${eu}`
+    };
+    const href = targets[channel];
+    if (!href) return;
+    if (window.posthog && typeof window.posthog.capture === 'function') {
+      try { window.posthog.capture('job_share', { channel, job_id: job.id, title: job.title || '', company: job.company || '' }); } catch (e) {}
+    }
+    if (channel === 'email') window.location.href = href;
+    else window.open(href, '_blank', 'noopener');
+    this.closeJobShareModal();
+  }
+
+  copyJobLink() {
+    const job = this._shareJobSubject();
+    if (!job) return;
+    if (window.posthog && typeof window.posthog.capture === 'function') {
+      try { window.posthog.capture('job_share', { channel: 'copy', job_id: job.id, title: job.title || '', company: job.company || '' }); } catch (e) {}
+    }
+    try { Promise.resolve(this._copyToClipboard(this.jobShareUrl(job))).catch(() => {}); } catch (e) {}
+    this.showToast('Job link copied.');
+    this.closeJobShareModal();
+  }
+
+  /** Clipboard with the same execCommand fallback copyShareLink() inlines. */
+  _copyToClipboard(text) {
+    if (navigator.clipboard) return navigator.clipboard.writeText(text);
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+    return Promise.resolve();
+  }
+
   toggleHeroAudio() {
     const icon = document.getElementById('hero-play-icon');
     const waveContainer = document.querySelector('.audio-wave-anim');
@@ -3404,7 +3698,44 @@ class SwapikiApp {
 
   setJobsFilter(tab) {
     this.jobsFilter = tab;
-    this.renderJobsView();
+    this.jobsPersonalized = (tab === 'personalized');
+    this.jobsShown = JOBS_PAGE_SIZE;
+    const controls = document.getElementById('jobs-controls');
+    if (controls) {
+      controls.innerHTML = this._jobsBoardControls();
+      this._renderJobsResults();
+    } else {
+      this.renderJobsView();
+    }
+  }
+
+  togglePersonalizedJobs() {
+    if (this.jobsFilter === 'personalized') {
+      this.jobsFilter = 'all';
+      this.jobsPersonalized = false;
+    } else {
+      this.jobsFilter = 'personalized';
+      this.jobsPersonalized = true;
+    }
+    this.jobsShown = JOBS_PAGE_SIZE;
+    const controls = document.getElementById('jobs-controls');
+    if (controls) {
+      controls.innerHTML = this._jobsBoardControls();
+      this._renderJobsResults();
+    } else {
+      this.renderJobsView();
+    }
+  }
+
+  previewDemoPersonalization() {
+    this.jobsFilter = 'personalized';
+    this.jobsPersonalized = true;
+    this.jobsShown = JOBS_PAGE_SIZE;
+    const controls = document.getElementById('jobs-controls');
+    if (controls) {
+      controls.innerHTML = this._jobsBoardControls();
+    }
+    this._renderJobsResults();
   }
 
   setJobsType(type) {
@@ -3419,6 +3750,7 @@ class SwapikiApp {
 
   setJobsQuery(q) {
     this.jobsQuery = (q || '').toLowerCase().trim();
+    this.jobsShown = JOBS_PAGE_SIZE;
     this._syncJobsQueryToUrl();
     this._scheduleSearchLog();
     this._renderJobsResults();
@@ -3507,6 +3839,53 @@ class SwapikiApp {
     return 'onsite';
   }
 
+  /**
+   * The words in a search box that actually mean something.
+   *
+   * The box used to match the WHOLE query as one substring, so a natural phrase
+   * like "sales jobs in pune" looked for that exact run of characters and found
+   * nothing: the listing says "Sales Executive" in "Pune", never that sentence.
+   * Splitting the query into terms and dropping the filler ("jobs", "in", "for"…)
+   * turns the phrase into ["sales", "pune"], which is what the board can match.
+   * One-character tokens are dropped as noise.
+   */
+  _jobSearchTokens(q) {
+    const STOP = new Set(['job', 'jobs', 'opening', 'openings', 'vacancy', 'vacancies',
+      'position', 'positions', 'role', 'roles', 'hiring', 'hire', 'work', 'in', 'at',
+      'for', 'the', 'a', 'an', 'and', 'or', 'of', 'to', 'with', 'on', 'near', 'from',
+      'as', 'is', 'are', 'want', 'wanted', 'looking']);
+    const raw = String(q || '').toLowerCase().match(/[a-z0-9+#]+/g) || [];
+    return raw.filter(t => t.length >= 2 && !STOP.has(t));
+  }
+
+  /**
+   * Everything one listing can be found by, flattened once and cached on the row.
+   *
+   * Cached because the board holds thousands of rows and this runs on every
+   * keystroke; re-joining the same strings for the same job on each filter pass is
+   * the difference between a search that keeps up with typing and one that stutters.
+   */
+  _jobSearchHaystack(j) {
+    if (!j.__searchHay) {
+      j.__searchHay = [j.title, j.company, (Array.isArray(j.skills) ? j.skills.join(' ') : ''),
+        j.location, j.category, j.description].filter(Boolean).join(' ').toLowerCase();
+    }
+    return j.__searchHay;
+  }
+
+  /**
+   * A listing matches when EVERY term is found somewhere in it.
+   *
+   * "sales pune" has to mean "sales AND pune", not the phrase. Requiring all the
+   * terms narrows a two-word search to the jobs someone means instead of widening
+   * it to everything that contains either word.
+   */
+  _jobMatchesTokens(j, tokens) {
+    if (!tokens.length) return true;
+    const hay = this._jobSearchHaystack(j);
+    return tokens.every(t => hay.includes(t));
+  }
+
   _filterChip(label, value, current, on) {
     return `<button onclick="${on}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${current === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">${label}</button>`;
   }
@@ -3560,7 +3939,7 @@ class SwapikiApp {
         ${channels}
         ${submitForm}
         ${gateBanner}
-        ${unlocked ? this._jobsBoardControls() : ''}
+        <div id="jobs-controls">${unlocked ? this._jobsBoardControls() : ''}</div>
         <div id="jobs-results"></div>
       </div>`;
 
@@ -3569,9 +3948,12 @@ class SwapikiApp {
     // either way (/jobs.json, /feed.xml, /sitemap.xml, every /jobs/<slug> page).
     const jobs = unlocked ? await swapikiStore.getPublishedJobs() : await swapikiStore.getPublicJobs();
     this._jobsCache = jobs;
+    // A fresh board (arrival, or a tab/type/mode change) starts on the first
+    // page again, so "Show more" never leaves a stale window behind a filter.
+    this.jobsShown = JOBS_PAGE_SIZE;
     // Only the unlocked board owns the structured data. The signed-out /jobs
-    // document already carries the server-rendered JobPosting graph, so a
-    // second, thinner copy here would contradict it.
+    // document already carries the server-rendered graph, so a second, thinner
+    // copy here would contradict it.
     if (unlocked) this._injectJobsJsonLd(jobs);
     // Restore a shared filter, for the unlocked board only - a /jobs?q=react
     // link was silent before this. On the gated board the search stays off, so a
@@ -3590,9 +3972,15 @@ class SwapikiApp {
     const typeFilter = this.jobsType || 'all';
     const modeFilter = this.jobsMode || 'all';
     const q = this.jobsQuery || '';
+    const isPersonalized = tab === 'personalized' || !!this.jobsPersonalized;
     return `
       <div class="flex flex-wrap items-center gap-2 mb-3">
         <button onclick="app.setJobsFilter('all')" class="px-4 py-2 rounded-lg text-xs font-bold transition-colors ${tab === 'all' ? 'bg-primary text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">All</button>
+        <button onclick="app.setJobsFilter('personalized')" id="btn-tab-personalized" class="px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${tab === 'personalized' ? 'bg-gradient-to-r from-indigo-700 via-indigo-600 to-blue-600 text-white shadow-sm ring-2 ring-indigo-300' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'}">
+          <span class="material-symbols-outlined text-[15px]">auto_awesome</span>
+          <span>Matched for You</span>
+          <span class="text-[9px] uppercase px-1.5 py-0.5 rounded-full ${tab === 'personalized' ? 'bg-white/20 text-white' : 'bg-indigo-200/80 text-indigo-900'} font-black">Personalized</span>
+        </button>
         <button onclick="app.setJobsFilter('it')" class="px-4 py-2 rounded-lg text-xs font-bold transition-colors ${tab === 'it' ? 'bg-primary text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">IT</button>
         <button onclick="app.setJobsFilter('bfsi')" class="px-4 py-2 rounded-lg text-xs font-bold transition-colors ${tab === 'bfsi' ? 'bg-primary text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">BFSI</button>
         <button onclick="app.setJobsFilter('any')" class="px-4 py-2 rounded-lg text-xs font-bold transition-colors ${tab === 'any' ? 'bg-primary text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">Other Roles</button>
@@ -3600,7 +3988,11 @@ class SwapikiApp {
       </div>
       <div class="relative mb-3">
         <span class="material-symbols-outlined text-slate-400 text-lg absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
-        <input type="search" id="job-search" value="${this.escapeHtml(q)}" oninput="app.setJobsQuery(this.value)" onkeydown="if(event.key==='Enter')app.commitJobsQueryNow()" placeholder="Search roles, companies, skills, cities…" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all" />
+        <input type="search" id="job-search" value="${this.escapeHtml(q)}" oninput="app.setJobsQuery(this.value)" onkeydown="if(event.key==='Enter')app.commitJobsQueryNow()" placeholder="Search a role, skill, company or city — e.g. 'sales in Pune'" class="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all" />
+      </div>
+      <div class="flex flex-wrap items-center gap-1.5 mb-3 text-[11px]">
+        <span class="font-semibold text-slate-400">Try:</span>
+        ${['Sales', 'Pune', 'Bengaluru', 'Remote', 'Internship', 'Fresher', 'Data'].map(s => `<button onclick="app.setJobsQuery('${s}')" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition-colors">${s}</button>`).join('')}
       </div>
       <div class="flex flex-wrap items-center gap-2 mb-6">
         ${this._filterChip('Jobs', 'job', typeFilter, "app.setJobsType('job')")}
@@ -3611,6 +4003,11 @@ class SwapikiApp {
         ${this._filterChip('Hybrid', 'hybrid', modeFilter, "app.setJobsMode('hybrid')")}
         ${this._filterChip('Onsite', 'onsite', modeFilter, "app.setJobsMode('onsite')")}
         ${modeFilter !== 'all' ? '<button onclick="app.setJobsMode(\'all\')" class="px-2 text-[11px] font-bold text-primary">Reset</button>' : ''}
+        <span class="mx-2 w-px h-4 bg-slate-200"></span>
+        <button onclick="app.togglePersonalizedJobs()" id="btn-chip-personalized" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${isPersonalized ? 'bg-indigo-700 text-white shadow-xs' : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'}">
+          <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+          <span>${isPersonalized ? 'Profile Fit Active' : 'Filter by My Profile'}</span>
+        </button>
       </div>`;
   }
 
@@ -3651,31 +4048,194 @@ class SwapikiApp {
     const typeFilter = this.jobsType || 'all';
     const modeFilter = this.jobsMode || 'all';
     const q = this.jobsQuery || '';
+    const isPersonalized = tab === 'personalized' || !!this.jobsPersonalized;
+
+    const profile = (typeof swapikiStore !== 'undefined' && swapikiStore && typeof swapikiStore.getProfile === 'function')
+      ? swapikiStore.getProfile()
+      : null;
+
+    const hasProfileSignals = profile && (
+      (profile.location && String(profile.location).trim().length > 0) ||
+      (Array.isArray(profile.expertise) && profile.expertise.length > 0) ||
+      (Array.isArray(profile.projects) && profile.projects.length > 0)
+    );
+
+    // If viewing the personalized tab and profile has zero signals, show setup prompt
+    if (tab === 'personalized' && !hasProfileSignals) {
+      const isLogged = typeof swapikiStore !== 'undefined' && swapikiStore && !!swapikiStore.currentUser;
+      container.innerHTML = `
+        <div class="text-center py-12 px-6 bg-white border border-indigo-200 rounded-3xl max-w-xl mx-auto shadow-sm">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
+            <span class="material-symbols-outlined text-3xl">auto_awesome</span>
+          </div>
+          <h2 class="text-lg font-bold text-slate-800 mb-2">Personalize Jobs with Your Profile</h2>
+          <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed mb-6">
+            Add your <strong>skills</strong>, <strong>proof projects</strong>, and <strong>city</strong> to unlock job recommendations tailored specifically to you.
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            ${isLogged
+              ? `<button onclick="router.navigate('dashboard')" class="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm">Complete Profile Details</button>`
+              : `<button onclick="app.openLoginModal()" class="px-5 py-2.5 bg-primary text-white font-bold text-xs rounded-xl hover:bg-primary/90 transition-all shadow-sm">Sign In to Personalize</button>`
+            }
+            <button onclick="app.previewDemoPersonalization()" class="px-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition-all">Preview with Demo Profile</button>
+          </div>
+        </div>`;
+      const count = document.getElementById('job-count');
+      if (count) count.textContent = '0 jobs';
+      return;
+    }
+
+    // Precalculate personalized matches when available
+    if (profile && hasProfileSignals && typeof window !== 'undefined' && window.profileMatch && typeof window.profileMatch.computePersonalizedMatch === 'function') {
+      const pId = profile.id || profile.username || 'active_user';
+      jobs.forEach(j => {
+        if (!j._pm || j._pmProfileId !== pId) {
+          try {
+            j._pm = window.profileMatch.computePersonalizedMatch(profile, j);
+            j._pmProfileId = pId;
+          } catch (e) {
+            j._pm = null;
+          }
+        }
+      });
+    }
+
+    const tokens = this._jobSearchTokens(q);
     const filtered = jobs.filter(j => {
-      if (tab !== 'all' && (j.category || 'it') !== tab) return false;
+      if (tab !== 'all' && tab !== 'personalized' && (j.category || 'it') !== tab) return false;
       if (typeFilter !== 'all' && this._jobType(j) !== typeFilter) return false;
       if (modeFilter !== 'all' && this._jobMode(j) !== modeFilter) return false;
-      if (q) {
-        const haystack = [j.title, j.company, (j.skills || []).join(' '), j.location || '', j.description || ''].join(' ').toLowerCase();
-        if (!haystack.includes(q)) return false;
+      if (!this._jobMatchesTokens(j, tokens)) return false;
+      if (tab === 'personalized' && j._pm && typeof j._pm.overall === 'number' && j._pm.overall < 30) {
+        return false;
       }
       return true;
     });
 
+    if (isPersonalized) {
+      filtered.sort((a, b) => {
+        const sa = (a._pm && typeof a._pm.overall === 'number') ? a._pm.overall : 0;
+        const sb = (b._pm && typeof b._pm.overall === 'number') ? b._pm.overall : 0;
+        return sb - sa;
+      });
+    }
+
     const count = document.getElementById('job-count');
     if (count) count.textContent = `${filtered.length} job${filtered.length === 1 ? '' : 's'}`;
 
-    const emptyLabel = tab === 'any' ? 'Other Roles' : tab.toUpperCase();
+    let personalizedBanner = '';
+    if (isPersonalized && hasProfileSignals) {
+      const pmUtil = (typeof window !== 'undefined') ? window.profileMatch : null;
+      const locInfo = (pmUtil && typeof pmUtil.parseProfileLocation === 'function')
+        ? pmUtil.parseProfileLocation(profile.location)
+        : null;
+      const locDisplay = (locInfo && locInfo.cityName)
+        ? `${locInfo.cityName}${locInfo.isRemoteReady ? ' (+ Remote)' : ''}`
+        : (profile.location || 'India / Remote Ready');
+      const expList = Array.isArray(profile.expertise) ? profile.expertise : [];
+      const skillsDisplay = expList.slice(0, 3).join(', ') + (expList.length > 3 ? ` +${expList.length - 3}` : '');
+      const projCount = Array.isArray(profile.projects) ? profile.projects.length : 0;
+      const firstProject = projCount > 0 ? (profile.projects[0].title || '') : '';
+
+      personalizedBanner = `
+        <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-primary text-white rounded-2xl p-5 mb-5 shadow-lg border border-indigo-800/40">
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-amber-400 text-slate-900 flex items-center justify-center shadow-md shrink-0">
+                <span class="material-symbols-outlined text-2xl font-bold">auto_awesome</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-base font-bold text-white tracking-tight">Personalized for Your Profile</h2>
+                  <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold px-2 py-0.5 rounded-full">Tailored Feed</span>
+                </div>
+                <p class="text-xs text-indigo-200/80 mt-0.5">Scored & ranked against your real skills, proof projects, and city</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="router.navigate('dashboard')" class="text-xs text-indigo-200 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg border border-white/20 transition-all font-medium inline-flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">edit</span> Edit Profile
+              </button>
+              <button onclick="app.setJobsFilter('all')" class="text-xs text-indigo-300 hover:text-white px-2 py-1 transition-all">Reset to All</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-3 border-t border-indigo-800/50 text-xs">
+            <div class="bg-indigo-950/70 rounded-xl p-2.5 border border-indigo-800/40">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-0.5 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[13px] text-amber-400">location_on</span> City / Target
+              </p>
+              <p class="font-bold text-white truncate" title="${this.escapeHtml(locDisplay)}">${this.escapeHtml(locDisplay)}</p>
+            </div>
+            <div class="bg-indigo-950/70 rounded-xl p-2.5 border border-indigo-800/40">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-0.5 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[13px] text-sky-400">psychology</span> Skills
+              </p>
+              <p class="font-bold text-white truncate" title="${this.escapeHtml(skillsDisplay || 'Profile skills')}">${this.escapeHtml(skillsDisplay || 'Profile skills')}</p>
+            </div>
+            <div class="bg-indigo-950/70 rounded-xl p-2.5 border border-indigo-800/40">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-0.5 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[13px] text-emerald-400">rocket_launch</span> Proof Projects
+              </p>
+              <p class="font-bold text-white truncate" title="${this.escapeHtml(firstProject || `${projCount} Projects`)}">${projCount} Project${projCount === 1 ? '' : 's'}${firstProject ? ` (${this.escapeHtml(firstProject)})` : ''}</p>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    const emptyLabel = tab === 'any' ? 'Other Roles' : tab === 'personalized' ? 'Your Profile Matches' : tab.toUpperCase();
     const filtersActive = typeFilter !== 'all' || modeFilter !== 'all' || !!q;
     const empty = `
       <div class="text-center py-16 bg-white border border-slate-200 rounded-3xl">
         <span class="material-symbols-outlined text-4xl text-slate-300 mb-2 block">work_off</span>
-        <p class="text-sm text-slate-400">${filtersActive ? 'No jobs match those filters. Try resetting the chips or the search.' : `No jobs yet${tab === 'all' ? '' : ' in ' + emptyLabel}. New openings appear as they're vetted and posted.`}</p>
+        <p class="text-sm font-semibold text-slate-500">${tab === 'personalized' ? 'No openings closely match your profile criteria yet.' : filtersActive ? `No openings match${q ? ` “${this.escapeHtml(q)}”` : ''}.` : `No jobs yet${tab === 'all' ? '' : ' in ' + emptyLabel}.`}</p>
+        <p class="text-xs text-slate-400 mt-2 max-w-sm mx-auto leading-relaxed">${tab === 'personalized' ? 'Try widening your skills in your profile, or browse all jobs across India.' : filtersActive ? 'Try fewer or simpler words — a role and a city works best, e.g. “sales Pune”.' : "New openings appear as they're vetted and posted."}</p>
+        <button onclick="app.clearJobsFilters()" class="mt-4 px-4 py-2 border-2 border-primary text-primary font-bold text-xs rounded-xl hover:bg-primary-fixed transition-all">Clear search & filters</button>
       </div>`;
 
-    container.innerHTML = filtered.length
-      ? `<div class="space-y-4">${filtered.map(j => this.renderJobCard(j)).join('')}</div>`
+    // Paint one page at a time. The board holds thousands of rows and mapping
+    // every card into one innerHTML blocks the main thread for seconds; the
+    // visitor gets the first screen immediately and pulls the rest on demand.
+    const limit = this.jobsShown || JOBS_PAGE_SIZE;
+    const visible = filtered.slice(0, limit);
+    const remaining = filtered.length - visible.length;
+    const more = remaining > 0 ? `
+      <div class="flex flex-col items-center gap-2 mt-5">
+        <button onclick="app.showMoreJobs()" class="inline-flex items-center gap-1 px-5 py-2.5 border-2 border-primary text-primary font-bold text-xs rounded-xl hover:bg-primary-fixed transition-all active:scale-95">
+          Show ${Math.min(JOBS_PAGE_SIZE, remaining)} more <span class="material-symbols-outlined text-sm">expand_more</span>
+        </button>
+        <span class="text-[11px] text-slate-400">Showing ${visible.length} of ${filtered.length} openings</span>
+      </div>` : '';
+
+    container.innerHTML = visible.length
+      ? `${personalizedBanner}<div class="space-y-4">${visible.map(j => this.renderJobCard(j)).join('')}</div>${more}`
       : empty;
+  }
+
+  /** "Show more": extend the board by one page and repaint the results. */
+  showMoreJobs() {
+    this.jobsShown = (this.jobsShown || JOBS_PAGE_SIZE) + JOBS_PAGE_SIZE;
+    this._renderJobsResults();
+  }
+
+  /**
+   * Reset the search box and the chips from the empty state's "clear" button.
+   *
+   * Re-renders the controls as well as the results, so the chips lose their active
+   * styling and the box is visibly empty again — clearing the state without
+   * repainting the controls would leave a highlighted chip over an unfiltered
+   * board, which reads as broken.
+   */
+  clearJobsFilters() {
+    this.jobsQuery = '';
+    this.jobsType = 'all';
+    this.jobsMode = 'all';
+    this.jobsFilter = 'all';
+    this.jobsPersonalized = false;
+    this.jobsShown = JOBS_PAGE_SIZE;
+    const controls = document.getElementById('jobs-controls');
+    if (controls) controls.innerHTML = this._jobsBoardControls();
+    this._syncJobsQueryToUrl();
+    this._renderJobsResults();
   }
 
   /** Profile-vs-listing match score, shown on a card directly under the
@@ -3684,6 +4244,14 @@ class SwapikiApp {
    *  description, skills and title. No profile, or no scorer loaded, means no
    *  pill — a zero here would read as a real score. */
   jobMatchPill(j) {
+    if (j._pm && typeof j._pm.overall === 'number') {
+      const result = j._pm;
+      const cls = result.overall >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        : result.overall >= 60 ? 'bg-blue-50 text-blue-700 border-blue-200'
+        : result.overall >= 40 ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+        : 'bg-slate-100 text-slate-600 border-slate-200';
+      return `<span class="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border ${cls}" title="${this.escapeHtml(result.summary || result.band)}"><span class="material-symbols-outlined text-[12px]">auto_awesome</span>${result.overall}% match</span>`;
+    }
     const pm = (typeof window !== 'undefined' && window.profileMatch) ? window.profileMatch : null;
     if (!pm || typeof pm.computeProfileMatch !== 'function') return '';
     const profile = (typeof swapikiStore !== 'undefined' && swapikiStore && typeof swapikiStore.getProfile === 'function')
@@ -3733,53 +4301,44 @@ class SwapikiApp {
         ${skills ? `<div class="flex flex-wrap gap-1.5 mt-1 mb-3">${skills}</div>` : ''}
         ${j.salary ? `<p class="text-[11px] text-slate-400 flex items-center gap-1 mb-1"><span class="material-symbols-outlined text-[13px]">payments</span>${this.escapeHtml(j.salary)}</p>` : ''}
         ${j.description ? `<p class="text-xs text-slate-600 leading-relaxed mb-3">${this.escapeHtml(j.description)}</p>` : ''}
-        <button onclick="app.openJobApplyModal('${j.id}')" class="mt-1 px-4 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary/90 transition-all">Apply with my profile</button>
+        ${j._pm && j._pm.reasons && j._pm.reasons.length > 0 ? `
+        <div class="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 mb-3 border-t border-slate-100 text-[11px]">
+          <span class="font-bold text-[10px] uppercase tracking-wider text-indigo-700 flex items-center gap-0.5">
+            <span class="material-symbols-outlined text-[13px]">auto_awesome</span> Profile Fit:
+          </span>
+          ${j._pm.reasons.map(r => `<span class="bg-indigo-50/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-md text-[10px] border border-indigo-100/80">${this.escapeHtml(r)}</span>`).join('')}
+        </div>` : ''}
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <button onclick="app.openJobApplyModal('${j.id}')" class="px-4 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary/90 transition-all">Apply with my profile</button>
+          <button onclick="app.openJobShareModal('${j.id}')" title="Share this job" aria-label="Share this job" class="px-3 py-2 border border-slate-200 text-slate-600 font-bold text-xs rounded-lg hover:bg-slate-50 hover:text-primary transition-all inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">share</span>Share</button>
+        </div>
       </div>`;
   }
 
-  /** Injects JSON-LD JobPosting structured data for the jobs view so search
-   *  engines that execute JS can index listings like the static /jobs page. */
+  /** The structured data for the jobs view.
+   *
+   *  The jobs view is a LIST of jobs, so it must not carry JobPosting markup.
+   *  Google's job posting content policy allows it only on a page about a
+   *  single job: "The JobPosting markup must only be used on pages that contain
+   *  a single job posting. We don't allow the use of JobPosting markup in any
+   *  other page, including pages that do not list any job." A posting also has
+   *  to sit on the same page as the job description a reader can read, and a
+   *  board card shows a title, a company and a location, not the description.
+   *  Each posting lives on its own /jobs/<slug> page instead.
+   *
+   *  And it must not carry an ItemList either. An ItemList is Google's carousel
+   *  markup, and a carousel is only supported next to a Course list, a Movie, a
+   *  Recipe or a Restaurant - a list of job pages is none of those, so the
+   *  markup could never show a carousel. What it did do was count: Search
+   *  Console counted every one of its ListItems as an item on the page and
+   *  flagged them ("/jobs: 200 items detected, some are invalid").
+   *
+   *  So this view leaves the graph the server wrote alone, minus the two node
+   *  types it owns: any ItemList that describes a set of rows, and any
+   *  JobPosting, which has no business here. The board's own links and the
+   *  per-job pages carry the openings. */
   _injectJobsJsonLd(jobs) {
     if (!Array.isArray(jobs) || jobs.length === 0) return;
-    // The whole board, not a slice of ten. Capping the markup while the page
-    // showed every row told crawlers the board was ten jobs long.
-    const graph = jobs.map(j => {
-      const pos = {
-        '@type': 'JobPosting',
-        title: j.title || '',
-        hiringOrganization: { '@type': 'Organization', name: j.company || '' }
-      };
-      // Google requires one of `url` or `hiringOrganization.sameAs` for a
-      // JobPosting to count as complete. Prefer the real listing link; fall
-      // back to the board itself only when the row has no usable one.
-      const apply = this.safeHttpUrl(j.apply_url || j.contact);
-      pos.url = apply || 'https://swapiki.com/jobs';
-      // false, matching the server (functions/lib/jobs-feed.js) and llms.txt.
-      // Clicking Apply leaves for the employer's own system, so Swapiki's page
-      // does not accept the application. Emitting `true` here put two graphs on
-      // one page with opposite values for the same job, which is exactly the
-      // kind of contradiction an answer engine resolves by trusting neither.
-      pos.directApply = false;
-      if (j.first_seen_at) pos.datePosted = String(j.first_seen_at).slice(0, 10);
-      if (j.location) pos.jobLocation = { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: j.location } };
-      // baseSalary only from stored numeric bounds. j.salary is a DISPLAY STRING
-      // (e.g. "Rs 12,00,000 - Rs 18,00,000"), and emitting that as a
-      // QuantitativeValue value is a malformed number to a parser.
-      const min = this.numericSalary(j.salary_min);
-      const max = this.numericSalary(j.salary_max);
-      if (min !== null || max !== null) {
-        const value = { '@type': 'QuantitativeValue', unitText: 'YEAR' };
-        if (min !== null) value.minValue = min;
-        if (max !== null) value.maxValue = max;
-        pos.baseSalary = { '@type': 'MonetaryAmount', currency: 'INR', value };
-      }
-      // employmentType is deliberately omitted. The feed carries a contract_time
-      // but it is not stored, so asserting FULL_TIME for all 300+ listings is an
-      // unverified claim. Google says to omit the field when unknown.
-      return pos;
-    });
-    // Reuse the server-injected element when present. Creating a second
-    // ld+json block would leave two conflicting JobPosting graphs in one page.
     let el = document.getElementById('jobs-jsonld');
     if (!el) {
       el = document.createElement('script');
@@ -3787,7 +4346,16 @@ class SwapikiApp {
       el.id = 'jobs-jsonld';
       document.head.appendChild(el);
     }
-    el.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': graph });
+    let nodes = [];
+    try {
+      const parsed = JSON.parse(el.textContent);
+      nodes = Array.isArray(parsed && parsed['@graph']) ? parsed['@graph'] : [];
+    } catch (e) { nodes = []; }
+    // Whatever the server wrote stays, except for the two node types this view
+    // owns: an ItemList, which describes a set of rows as a carousel, and any
+    // JobPosting, which has no business here.
+    const kept = nodes.filter(n => n && n['@type'] !== 'ItemList' && n['@type'] !== 'JobPosting');
+    el.textContent = JSON.stringify({ '@context': 'https://schema.org', '@graph': kept });
   }
 
   /** Only http/https survives — a feed-supplied `javascript:` link must not reach markup. */
@@ -3884,6 +4452,9 @@ const hasUrl = !!applyTarget;
                 <span class="material-symbols-outlined text-lg">co_present</span> Interview prep
               </button>
             </div>
+            <button onclick="app.closeJobApplyModal(); app.openJobShareModal('${job.id}')" class="w-full py-3 border-2 border-blue-900 text-blue-900 font-bold text-[13px] rounded-xl hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5">
+              <span class="material-symbols-outlined text-lg">share</span> Share this job
+            </button>
             <div class="-mt-1">${this._toolUsageHtml(null)}</div>
             <button onclick="app.openInterviewPrep('${job.id}'); setTimeout(function(){ const el = document.getElementById('gh-picker'); if (el) el.scrollIntoView({block:'center'}); }, 700);" class="text-left text-[13px] font-bold text-blue-900 hover:underline flex items-center gap-1.5">
               <span class="material-symbols-outlined text-lg">code</span> Which of my GitHub projects fit this job?
@@ -6354,25 +6925,33 @@ if (welcomeTitle) {
     ? `Welcome, ${firstName}!`
     : `Welcome back, ${firstName}.`;
 }
+    const suspended = profile.profileStatus === 'suspended';
     const statusSubtitle = document.getElementById('dash-status-subtitle');
     if (statusSubtitle) {
-      statusSubtitle.textContent = profile.profileStatus === 'published'
-        ? 'Your proof profile is published and visible to hiring managers across India.'
-        : "Your proof profile is still in draft. Your link already works — publishing just marks it as ready for review.";
+      statusSubtitle.textContent = suspended
+        ? 'Your profile is paused while our team reviews a report, so it is not visible to hiring managers right now.'
+        : (profile.profileStatus === 'published'
+          ? 'Your proof profile is published and visible to hiring managers across India.'
+          : "Your proof profile is still in draft. Your link already works — publishing just marks it as ready for review.");
     }
 
     const profileStatus = document.getElementById('dash-profile-status');
     const publishButton = document.getElementById('btn-publish-profile');
     const statusDot = document.getElementById('dash-status-dot');
  if (profileStatus) {
-  profileStatus.textContent = profile.profileStatus === 'published' ? 'Published and visible to hiring managers' : 'Draft — link is live, not yet marked ready';
-  profileStatus.className = 'font-label-sm text-label-sm text-emerald-300 font-bold uppercase tracking-wider';
+  profileStatus.textContent = suspended ? 'Paused — under review' : (profile.profileStatus === 'published' ? 'Published and visible to hiring managers' : 'Draft — link is live, not yet marked ready');
+  profileStatus.className = suspended
+    ? 'font-label-sm text-label-sm text-rose-300 font-bold uppercase tracking-wider'
+    : 'font-label-sm text-label-sm text-emerald-300 font-bold uppercase tracking-wider';
 }
 if (statusDot) {
-  statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+  statusDot.className = suspended
+    ? 'w-2.5 h-2.5 rounded-full bg-rose-400'
+    : 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
 }
     if (publishButton) {
-      publishButton.textContent = profile.profileStatus === 'published' ? 'Unpublish Profile' : 'Publish Profile';
+      publishButton.textContent = suspended ? 'Profile under review' : (profile.profileStatus === 'published' ? 'Unpublish Profile' : 'Publish Profile');
+      publishButton.disabled = suspended;
       publishButton.onclick = () => this.publishProfile();
     }
 
@@ -6387,8 +6966,16 @@ if (statusDot) {
     // both numbers always agree (logic lives in js/profileChecklist.js).
     this.renderProfileChecklist();
 
+    // Referral counts (credited referrals unlock extra project slots). Async so
+    // the dashboard paints immediately; the row and the slot meter update when
+    // it lands.
+    this.loadReferralStats();
+
     // Real project-slot usage (was previously a hardcoded "2 / 2 Slots Active" that never changed).
-    const maxSlots = this.maxProjects || 4;
+    // Effective cap = base four + any referral bonus (see store.getMaxProjects).
+    const maxSlots = (swapikiStore && typeof swapikiStore.getMaxProjects === 'function')
+      ? swapikiStore.getMaxProjects()
+      : (this.maxProjects || 4);
     const projectCount = profile.projects.length;
     const slotLabel = document.getElementById('dash-projects-slot-label');
     const slotBar = document.getElementById('dash-projects-slot-bar');
@@ -6449,10 +7036,10 @@ if (statusDot) {
     // Project Cards
     profile.projects.forEach((proj, idx) => {
       const hasImage = !!proj.imageUrl;
-      const statusLabel = profile.profileStatus === 'published' ? 'Published' : 'Draft';
+      const statusLabel = profile.profileStatus === 'suspended' ? 'Paused' : (profile.profileStatus === 'published' ? 'Published' : 'Draft');
       const statusClasses = profile.profileStatus === 'published'
         ? 'bg-on-tertiary-container text-tertiary-container'
-        : 'bg-slate-200 text-slate-700';
+        : (profile.profileStatus === 'suspended' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700');
 
       const card = document.createElement('div');
       card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col bento-card group";
@@ -6489,10 +7076,11 @@ if (statusDot) {
 
     // Update slots counter UI
     const slotsCountEl = document.getElementById('dash-projects-slot-count');
-    if (slotsCountEl) slotsCountEl.textContent = `${profile.projects.length} / 4 slots used (Min 1, Max 4)`;
+    if (slotsCountEl) slotsCountEl.textContent = `${profile.projects.length} / ${maxSlots} slots used (Min 1, Max ${maxSlots})`;
 
-    // Add Empty Create Project Card if under the maximum of four projects.
-    if (profile.projects.length > 0 && profile.projects.length < 4)  {
+    // Add Empty Create Project Card while there is still room under the cap
+    // (four by default, more if the candidate has earned referral slots).
+    if (profile.projects.length > 0 && profile.projects.length < maxSlots)  {
       const addCard = document.createElement('div');
       addCard.className = "bg-surface-container-lowest border-2 border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center p-12 text-center group cursor-pointer hover:border-primary hover:bg-white transition-all bento-card h-[420px]";
       addCard.onclick = () => router.navigate('add-project');
@@ -6537,6 +7125,22 @@ if (statusDot) {
     const container = document.getElementById('dash-checklist-items');
     if (!container) return;
 
+    // The referral row is a bonus row, not a completion step: it deliberately
+    // sits outside CHECKLIST_DEFS so it never moves the percentage above. It is
+    // the entry point to the referral loop (copy a personal invite link).
+    const referralRow = `
+      <div data-referral="1"
+        class="flex items-center justify-between gap-3 py-2.5 cursor-pointer select-none hover:bg-slate-50">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="material-symbols-outlined text-primary shrink-0">group_add</span>
+          <div class="min-w-0">
+            <span class="text-sm text-slate-700 font-medium block">Refer a friend</span>
+            <span id="dash-referral-sub" class="text-xs text-slate-400 block">Invite someone — unlock an extra project slot when their profile publishes.</span>
+          </div>
+        </div>
+        <span class="text-xs font-bold text-primary shrink-0 flex items-center gap-0.5">Copy link <span class="material-symbols-outlined text-sm">content_copy</span></span>
+      </div>`;
+
     container.innerHTML = checklist.items.map(item => `
       <div data-key="${item.key}" data-done="${item.done}"
         class="flex items-center justify-between gap-3 py-2.5 cursor-pointer select-none
@@ -6550,7 +7154,11 @@ if (statusDot) {
           : item.action === 'add-project'
             ? `<a href="#add-project" class="text-xs font-bold text-primary shrink-0 flex items-center gap-0.5">Fix it <span class="material-symbols-outlined text-sm">chevron_right</span></a>`
             : `<span class="text-xs font-bold text-primary shrink-0 flex items-center gap-0.5">Fix it <span class="material-symbols-outlined text-sm">chevron_right</span></span>`}
-      </div>`).join('');
+      </div>`).join('') + referralRow;
+
+    // Reflect counts we already hold; the async refresh rewrites this a moment
+    // later once the RPC answers.
+    if (this._referralStats) this.updateReferralRow(this._referralStats);
 
     // Delegated listener (not inline onclick) so rows stay clickable even if
     // something else ever re-renders the list. Re-bind each render to avoid
@@ -6560,6 +7168,12 @@ if (statusDot) {
       // Real anchor links (e.g. <a href="#add-project">) handle themselves via
       // native hash routing — don't double-fire a JS navigation on top.
       if (ev.target.closest('a[href^="#"]')) return;
+      // The referral row (a bonus row, not a completion step) copies the invite
+      // link instead of jumping to a step.
+      if (ev.target.closest('[data-referral]')) {
+        this.copyReferralLink();
+        return;
+      }
       const row = ev.target.closest('[data-key]');
       if (!row) return;
       // Completed rows stay clickable (e.g. "add another project", "re-record
@@ -6572,6 +7186,107 @@ if (statusDot) {
       }
     };
     container.addEventListener('click', this._checklistClick);
+  }
+
+  /** Fetch this candidate's referral counts and reflect them in the referral
+   *  row and the project-slot meter. Safe when the referral migration has not
+   *  run: the store answers {0,0} and the row keeps its "invite a friend" copy. */
+  async loadReferralStats() {
+    if (!swapikiStore || typeof swapikiStore.getReferralStats !== 'function') return;
+    let stats;
+    try {
+      stats = await swapikiStore.getReferralStats();
+    } catch (err) {
+      return;
+    }
+    this._referralStats = stats || { total: 0, credited: 0 };
+    this.updateReferralRow(this._referralStats);
+
+    // Credited referrals may have raised the cap; repaint the slot meter (the
+    // project grid re-renders on the next dashboard visit).
+    const profile = (typeof swapikiStore.getProfile === 'function') ? swapikiStore.getProfile() : null;
+    const count = (profile && Array.isArray(profile.projects)) ? profile.projects.length : 0;
+    const maxSlots = (typeof swapikiStore.getMaxProjects === 'function') ? swapikiStore.getMaxProjects() : 4;
+    const slotLabel = document.getElementById('dash-projects-slot-label');
+    const slotBar = document.getElementById('dash-projects-slot-bar');
+    if (slotLabel) slotLabel.textContent = `${count} / ${maxSlots} Slots Active`;
+    if (slotBar) slotBar.style.width = `${maxSlots > 0 ? (count / maxSlots) * 100 : 0}%`;
+    const slotsCountEl = document.getElementById('dash-projects-slot-count');
+    if (slotsCountEl) slotsCountEl.textContent = `${count} / ${maxSlots} slots used (Min 1, Max ${maxSlots})`;
+  }
+
+  /** Rewrites the referral row's subtitle to show progress once we know it. */
+  updateReferralRow(stats) {
+    const sub = document.getElementById('dash-referral-sub');
+    if (!sub) return;
+    const credited = (stats && stats.credited) || 0;
+    const total = (stats && stats.total) || 0;
+    if (total <= 0) {
+      sub.textContent = 'Invite someone — unlock an extra project slot when their profile publishes.';
+      return;
+    }
+    const bonus = (swapikiStore && typeof swapikiStore.getReferralBonus === 'function') ? swapikiStore.getReferralBonus() : 0;
+    const people = `${total} ${total === 1 ? 'person' : 'people'}`;
+    if (credited > 0) {
+      sub.textContent = `You've referred ${people} — ${credited} published, +${bonus} project slot${bonus === 1 ? '' : 's'} unlocked.`;
+    } else {
+      sub.textContent = `You've referred ${people} — a slot unlocks once they publish their profile.`;
+    }
+  }
+
+  /**
+   * Landing greeting for a friend who arrived through someone's invite link.
+   * The ?ref=<handle> was already captured first-touch at boot and lives in
+   * localStorage until it is attributed on signup, so this only has to read it,
+   * show a personal line, and offer the signup button. A signed-in visitor — or
+   * one with no pending invite — gets no banner. Returns the handle it showed,
+   * or null.
+   */
+  maybeShowInviteBanner() {
+    const banner = document.getElementById('invite-banner');
+    if (!banner) return null;
+
+    let ref = null;
+    try { ref = localStorage.getItem('swapiki_ref'); } catch (e) { ref = null; }
+
+    if (this.isAuthenticated() || !ref) {
+      banner.classList.add('hidden');
+      return null;
+    }
+
+    const handle = this.escapeHtml(ref);
+    banner.innerHTML =
+      `<span class="lp-invite-tag">Invited</span>` +
+      `<span class="lp-invite-text">You were invited by <b>@${handle}</b> ` +
+      `&mdash; build your proof profile and get heard by hiring managers.</span>` +
+      `<button type="button" class="lp-invite-cta" onclick="app.openSignupModal()">` +
+      `Create my profile <span aria-hidden="true">&rarr;</span></button>`;
+    banner.classList.remove('hidden');
+
+    try {
+      if (typeof window !== 'undefined' && window.posthog && typeof window.posthog.capture === 'function') {
+        window.posthog.capture('referral_invite_shown', { referrer: ref });
+      }
+    } catch (e) {}
+    return ref;
+  }
+
+  /** Copies this candidate's personal invite link (swapiki.com/?ref=<username>). */
+  copyReferralLink() {
+    const profile = (swapikiStore && typeof swapikiStore.getProfile === 'function') ? swapikiStore.getProfile() : {};
+    const username = (profile && (profile.username || profile.id)) || this.publicUsername;
+    if (!username) {
+      this.showToast('Finish your profile first — then you get a referral link.');
+      return;
+    }
+    const link = `https://swapiki.com/?ref=${encodeURIComponent(username)}`;
+    try { Promise.resolve(this._copyToClipboard(link)).catch(() => {}); } catch (e) {}
+    this.showToast('Referral link copied — share it with a friend.');
+    try {
+      if (typeof window !== 'undefined' && window.posthog && typeof window.posthog.capture === 'function') {
+        window.posthog.capture('referral_link_copied');
+      }
+    } catch (e) {}
   }
 
   /** Jump the candidate straight to wherever a checklist item gets completed. */
@@ -6801,7 +7516,24 @@ if (statusDot) {
     // Live-recording badge: shows only when this person actually passed the
     // spoken-code check. It says the audio is not a replay, not who is speaking.
     this.applyVoiceVerifiedBadge(profile);
+    this.applyReviewedBadge(profile);
     this.applyProfileAttestation(profile);
+
+    // "Report this profile" — the visitor-facing path to flag a scam so the team
+    // can act. Shown only when looking at someone else's public profile, never on
+    // your own preview or an admin preview. The target id is stashed here because
+    // the modal's submit handler has no other way to know whose profile it is.
+    this._reportTarget = {
+      id: profile && profile.id ? profile.id : null,
+      name: profile && profile.name ? profile.name : '',
+      username: username
+    };
+    const reportBtn = document.getElementById('rec-report-btn');
+    if (reportBtn) {
+      const showReport = !!this.publicUsername && !isAdminPreview && !!(profile && profile.id);
+      reportBtn.classList.toggle('hidden', !showReport);
+      reportBtn.classList.toggle('flex', showReport);
+    }
 
     // Sample/fictional profile notice: the built-in demo profile (the local
     // default, id "ananya_sharma") is fiction used to show the format, so it
@@ -7373,12 +8105,28 @@ if (statusDot) {
     } else {
       badge.classList.add('hidden');
     }
+  }
 
-    // Human "Reviewed by Swapiki team" badge - real, never auto-awarded.
-    const staffBadge = document.getElementById('staff-review-badge');
-    if (staffBadge) {
-      if (profile.staffReviewedAt) staffBadge.classList.remove('hidden');
-      else staffBadge.classList.add('hidden');
+  /**
+   * Toggles the public "Verified" badge. This is an automatic sign-off, not a
+   * human one: it shows once the profile is complete (details + a proof
+   * project) AND the live recording was confirmed. The criteria live in
+   * js/profileChecklist.js (isProfileReviewed) so the badge and the dashboard
+   * completeness bar can never disagree about what "done" means.
+   */
+  applyReviewedBadge(profile) {
+    const badge = document.getElementById('reviewed-badge');
+    if (!badge) return;
+    let reviewed = false;
+    try {
+      reviewed = !!(window.profileChecklist && window.profileChecklist.isProfileReviewed(profile));
+    } catch (err) {
+      reviewed = false;
+    }
+    if (reviewed) {
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
     }
   }
 
@@ -8147,6 +8895,59 @@ if (statusDot) {
     }
   }
 
+  openReportProfileModal() {
+    const modal = document.getElementById('modal-report-profile');
+    if (!modal) return;
+    const target = this._reportTarget || {};
+    const label = document.getElementById('report-profile-target');
+    if (label) label.textContent = target.name || target.username || 'this profile';
+    const details = document.getElementById('report-details');
+    if (details) details.value = '';
+    const email = document.getElementById('report-email');
+    if (email) email.value = '';
+    modal.classList.remove('hidden');
+  }
+
+  closeReportProfileModal() {
+    const modal = document.getElementById('modal-report-profile');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  async submitProfileReport(e) {
+    if (e) e.preventDefault();
+    const target = this._reportTarget || {};
+    if (!target.id) {
+      this.showToast('Could not tell which profile to report.');
+      return;
+    }
+    const reasonEl = document.getElementById('report-reason');
+    const detailsEl = document.getElementById('report-details');
+    const emailEl = document.getElementById('report-email');
+    const button = e && e.target ? e.target.querySelector('button[type="submit"]') : null;
+    const original = button ? button.textContent : '';
+    if (button) { button.disabled = true; button.textContent = 'Sending…'; }
+
+    let result;
+    try {
+      result = await swapikiStore.reportProfile({
+        candidateId: target.id,
+        reason: reasonEl ? reasonEl.value : 'other',
+        details: detailsEl ? detailsEl.value.trim() : '',
+        email: emailEl ? emailEl.value.trim() : '',
+        pageUrl: target.username ? `https://${target.username}.swapiki.com/` : ''
+      });
+    } finally {
+      if (button) { button.disabled = false; button.textContent = original; }
+    }
+
+    if (result && result.ok) {
+      this.closeReportProfileModal();
+      this.showToast('Thanks — the report reached the Swapiki team.');
+    } else {
+      this.showToast(`❌ ${(result && result.error) || 'Could not send the report.'}`);
+    }
+  }
+
   openSignupModal() {
     const modal = document.getElementById('modal-signup');
     if (modal) modal.classList.remove('hidden');
@@ -8354,6 +9155,10 @@ if (statusDot) {
 
   publishProfile() {
     const profile = swapikiStore.getProfile();
+    if (profile.profileStatus === 'suspended') {
+      this.showToast('Your profile is paused while our team reviews a report.');
+      return;
+    }
     if (profile.profileStatus === 'published') {
       swapikiStore.unpublishProfile();
       this.showToast('Profile unpublished and hidden from public view.');
