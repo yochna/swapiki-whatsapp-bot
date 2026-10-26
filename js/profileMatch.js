@@ -148,7 +148,9 @@ function computeProfileMatch(profile = {}, job = {}) {
       }
     ],
     matched: sk.matched,
-    missing: sk.missing
+    missing: sk.missing,
+    requiredYears: requiredYears(job),
+    profileYears: profileYears(profile)
   };
 }
 
@@ -198,32 +200,41 @@ function renderProfileMatchHtml(result) {
           <span class="text-xl font-black text-blue-900">${result.overall}%</span>
         </div>
       </div>`;
-  const skill = result.part.find(p => p.key === 'skills');
-  const others = result.part.filter(p => p.key !== 'skills');
-  const bars = `
-        ${skill ? barRow(skill) : ''}
-        <div class="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-          ${others.map(barRow).join('')}
-        </div>`;
+  // Build suggestions based on missing skills and experience gaps
+  let suggestions = '';
+  if (result.missing && result.missing.length) {
+    const miss = result.missing.slice(0, 3).join(', ');
+    suggestions += `<p class="text-sm text-indigo-800 mt-2"><strong>Missing skills:</strong> ${miss}${result.missing.length > 3 ? '…' : ''}</p>`;
+  }
+  if (result.requiredYears && result.profileYears != null && result.profileYears < result.requiredYears.min) {
+    const have = result.profileYears || 0;
+    const need = result.requiredYears.min;
+    suggestions += `<p class="text-sm text-indigo-800 mt-1"><strong>Experience gap:</strong> ${have} yr${have === 1 ? '' : 's'} vs required ${need}+ yr${need === 1 ? '' : 's'}.</p>`;
+  }
+  if (!suggestions) {
+    suggestions = `<p class="text-sm text-indigo-800 mt-2">You are a great fit! No immediate actions needed.</p>`;
+  }
 
-  const chips = [];
-  if (result.matched.length) chips.push(`<span class="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-blue-900 rounded-full px-2.5 py-0.5"><span class="material-symbols-outlined text-[11px]">check</span>${result.matched.slice(0, 6).join(', ')}${result.matched.length > 6 ? ` +${result.matched.length - 6}` : ''}</span>`);
-  if (result.missing.length) chips.push(`<span class="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-white border border-blue-300 rounded-full px-2.5 py-0.5"><span class="material-symbols-outlined text-[11px]">add_circle</span>${result.missing.slice(0, 6).join(', ')}${result.missing.length > 6 ? ` +${result.missing.length - 6}` : ''}</span>`);
-
-  return `
-      <div class="rounded-xl border border-blue-100 bg-white p-5">
-        <div class="flex items-center justify-between gap-2 mb-4">
-          <p class="text-[10px] font-bold uppercase tracking-wide text-blue-800">Match score</p>
-          <span class="text-[10px] font-bold px-2.5 py-1 rounded-full ${pillColor}">${result.band}</span>
+  // Premium container with glassmorphism and subtle animation
+  const container = `
+    <div class="bg-white/90 backdrop-blur-md border border-indigo-100 rounded-xl p-5 shadow-lg max-w-md mx-auto animate-fade-in">
+      <div class="flex items-center gap-4 mb-4">
+        ${ring}
+        <div class="flex flex-col">
+          <span class="text-lg font-semibold ${pillColor}">${result.band}</span>
+          <span class="text-sm text-gray-600 mt-1">${result.summary}</span>
         </div>
-        <div class="flex items-center gap-4 mb-5">
-          ${ring}
-          <p class="flex-1 text-sm text-blue-900 leading-snug">${result.summary}</p>
-        </div>
-        <div class="space-y-2.5">${bars}</div>
-        ${chips.length ? `<div class="flex flex-wrap gap-1.5 pt-4 mt-4 border-t border-blue-100">${chips.join('')}</div>` : ''}
-      </div>`;
+      </div>
+      ${suggestions}
+      <div class="mt-4 flex justify-between">
+        <button onclick="app.openJobApplyModal('${result.jobId || ''}')" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition">Apply now</button>
+        <button onclick="app.closeJobApplyModal()" class="px-3 py-2 text-gray-600 rounded-lg hover:bg-gray-100 transition">Close</button>
+      </div>
+    </div>`;
+  return container;
 }
+
+
 
 const KNOWN_CITIES = [
   { slug: "bangalore", name: "Bengaluru", aliases: ["bangalore", "bengaluru", "blr"] },
@@ -527,6 +538,150 @@ function computePersonalizedMatch(profile = {}, job = {}) {
   };
 }
 
+function generateVoicePitchTips(profile = {}, job = {}, pMatch = {}) {
+  const tips = [];
+  const bestProject = pMatch.projects && pMatch.projects.bestProject ? pMatch.projects.bestProject : null;
+  const locMatch = pMatch.location || {};
+  const skMatch = pMatch.skills || {};
+
+  if (bestProject && bestProject.title) {
+    tips.push(`Lead with your proof in "${bestProject.title}" — explain the specific problem you solved and the measurable impact you delivered.`);
+  } else if (Array.isArray(profile.projects) && profile.projects.length > 0) {
+    tips.push(`Reference your work on "${profile.projects[0].title}" to anchor your pitch in concrete evidence rather than generic claims.`);
+  } else {
+    tips.push(`Highlight your core domain strengths and why this role at ${job.company || 'this team'} aligns with your expertise.`);
+  }
+
+  if (skMatch.matched && skMatch.matched.length > 0) {
+    const top = skMatch.matched.slice(0, 3).join(', ');
+    tips.push(`Emphasize your hands-on mastery of ${top} and how you've applied them to deliver production-ready outcomes.`);
+  } else {
+    tips.push(`Talk about the tools, architecture patterns, and practices you rely on to ship quality work on schedule.`);
+  }
+
+  if (locMatch.isCityMatch && locMatch.cityName) {
+    tips.push(`Clarify that you are based in ${locMatch.cityName} for seamless in-person collaboration.`);
+  } else if (locMatch.isRemote) {
+    tips.push(`Reassure the hiring manager with your proven remote discipline, async habits, and clear communication.`);
+  } else {
+    tips.push(`Conclude by stating your current notice period and readiness to contribute from day one.`);
+  }
+
+  return tips;
+}
+
+function renderPersonalizedFitModalHtml(job = {}, profile = {}, pMatch = {}) {
+  const score = typeof pMatch.overall === 'number' ? pMatch.overall : 0;
+  const band = pMatch.band || 'Match';
+  const loc = pMatch.location || {};
+  const sk = pMatch.skills || {};
+  const pr = pMatch.projects || {};
+  const fo = typeof pMatch.focusScore === 'number' ? pMatch.focusScore : 60;
+  const ex = typeof pMatch.experienceScore === 'number' ? pMatch.experienceScore : 60;
+  const tips = generateVoicePitchTips(profile, job, pMatch);
+
+  const ringColor = score >= 80 ? '#059669' : score >= 60 ? '#2563eb' : score >= 40 ? '#4f46e5' : '#64748b';
+  const badgeCls = score >= 80 ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+    : score >= 60 ? 'bg-blue-50 text-blue-800 border-blue-200'
+    : score >= 40 ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+    : 'bg-slate-100 text-slate-700 border-slate-200';
+
+  const R = 32;
+  const C = 2 * Math.PI * R;
+  const offset = C - (C * score) / 100;
+
+  function bar(label, pct, detail, icon, iconColor = 'text-indigo-600') {
+    const barColor = pct >= 80 ? 'bg-emerald-600' : pct >= 60 ? 'bg-blue-600' : pct >= 40 ? 'bg-indigo-600' : 'bg-slate-400';
+    return `
+      <div>
+        <div class="flex items-center justify-between text-xs mb-1">
+          <span class="font-bold text-slate-800 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[15px] ${iconColor}">${icon}</span>
+            ${label}
+          </span>
+          <span class="font-extrabold text-slate-900">${pct}%</span>
+        </div>
+        <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+          <div class="h-full rounded-full ${barColor} transition-all duration-500" style="width:${pct}%"></div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-1 leading-snug">${detail}</p>
+      </div>`;
+  }
+
+  const matchedSkillsHtml = (sk.matched || []).map(s => 
+    `<span class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold px-2.5 py-1 rounded-lg text-[10px]"><span class="material-symbols-outlined text-[12px]">check</span>${s}</span>`
+  ).join('');
+
+  const missingSkillsHtml = (sk.missing || []).slice(0, 4).map(s => 
+    `<span class="inline-flex items-center gap-1 bg-slate-50 text-slate-600 border border-slate-200 font-medium px-2.5 py-1 rounded-lg text-[10px]"><span class="material-symbols-outlined text-[12px]">add</span>${s}</span>`
+  ).join('');
+
+  const tipsHtml = tips.map((t, idx) => `
+    <li class="flex items-start gap-2.5 text-xs text-indigo-100 leading-relaxed">
+      <span class="w-5 h-5 rounded-full bg-indigo-700/80 text-amber-300 font-bold flex items-center justify-center text-[10px] shrink-0 mt-0.5 border border-indigo-500/50">${idx + 1}</span>
+      <span>${t}</span>
+    </li>
+  `).join('');
+
+  return `
+    <div class="space-y-6">
+      <div class="bg-gradient-to-br from-indigo-50/70 to-blue-50/50 border border-indigo-100 rounded-2xl p-5 flex items-center gap-5">
+        <div class="relative w-20 h-20 shrink-0">
+          <svg viewBox="0 0 86 86" class="w-full h-full -rotate-90">
+            <circle cx="43" cy="43" r="${R}" fill="none" stroke="#e2e8f0" stroke-width="7"/>
+            <circle cx="43" cy="43" r="${R}" fill="none" stroke="${ringColor}" stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${offset.toFixed(1)}"/>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-xl font-black text-slate-900">${score}%</span>
+            <span class="text-[9px] uppercase font-bold text-slate-500">Fit</span>
+          </div>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${badgeCls}">${band}</span>
+            <span class="text-xs text-slate-400 font-medium">Personalized Assessment</span>
+          </div>
+          <p class="text-sm font-semibold text-slate-800 leading-snug">${pMatch.summary || 'Matched against your profile'}</p>
+        </div>
+      </div>
+
+      <div class="space-y-3.5 bg-white border border-slate-200 rounded-2xl p-5">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Compatibility Dimensions</h4>
+        ${bar('City & Location', loc.score || 70, loc.reason || 'Location fit', 'location_on', 'text-amber-500')}
+        ${bar('Required Skills', sk.score || 50, sk.reason || 'Skills fit', 'psychology', 'text-sky-500')}
+        ${bar('Proof Projects Fit', pr.score || 50, pr.reason || 'Projects evaluated', 'rocket_launch', 'text-emerald-500')}
+        ${bar('Role Alignment & Experience', Math.round(fo * 0.6 + ex * 0.4), `Role alignment ${fo}% · Experience match ${ex}%`, 'work', 'text-indigo-500')}
+      </div>
+
+      ${(matchedSkillsHtml || missingSkillsHtml) ? `
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Skills Breakdown</h4>
+        ${matchedSkillsHtml ? `
+          <p class="text-[11px] font-bold text-emerald-800 mb-1.5 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[13px]">verified</span> Skills on your profile:
+          </p>
+          <div class="flex flex-wrap gap-1.5 mb-3">${matchedSkillsHtml}</div>` : ''}
+        ${missingSkillsHtml ? `
+          <p class="text-[11px] font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
+            <span class="material-symbols-outlined text-[13px]">lightbulb</span> Mentioned in listing:
+          </p>
+          <div class="flex flex-wrap gap-1.5">${missingSkillsHtml}</div>` : ''}
+      </div>` : ''}
+
+      <div class="bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 text-white rounded-2xl p-5 shadow-sm border border-indigo-800/40">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="material-symbols-outlined text-amber-400 text-lg">mic</span>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-200">Suggested 2-Minute Walkthrough Talking Points</h4>
+        </div>
+        <p class="text-[11px] text-indigo-200/80 mb-3">Ground your audio walkthrough in these role-specific points to make an immediate impression on this hiring manager:</p>
+        <ul class="space-y-2.5 bg-indigo-900/40 border border-indigo-700/40 rounded-xl p-3.5 text-indigo-100">
+          ${tipsHtml}
+        </ul>
+      </div>
+    </div>`;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     computeProfileMatch,
@@ -539,7 +694,9 @@ if (typeof module !== 'undefined' && module.exports) {
     parseProfileLocation,
     matchJobLocation,
     matchJobProjects,
-    matchJobSkills
+    matchJobSkills,
+    generateVoicePitchTips,
+    renderPersonalizedFitModalHtml
   };
 }
 if (typeof window !== 'undefined') {
@@ -552,6 +709,8 @@ if (typeof window !== 'undefined') {
     parseProfileLocation,
     matchJobLocation,
     matchJobProjects,
-    matchJobSkills
+    matchJobSkills,
+    generateVoicePitchTips,
+    renderPersonalizedFitModalHtml
   });
 }

@@ -15,24 +15,29 @@
 
 import { DEFAULT_SUPABASE_URL, fetchPublishedJobs } from "./lib/jobs-feed.js";
 import { buildJobsJson } from "./lib/jobs-exports.js";
+import { cached } from "./lib/page-cache.js";
 
 export async function onRequestGet(context) {
   const { env } = context;
-  const jobs = await fetchPublishedJobs(
-    env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
-    env.SUPABASE_SERVICE_ROLE_KEY || ""
-  );
+  // Several megabytes of JSON built from a paged read of the whole board, which
+  // is far too much work to repeat per request: the edge holds it instead.
+  return cached(context, async () => {
+    const jobs = await fetchPublishedJobs(
+      env.SUPABASE_URL || DEFAULT_SUPABASE_URL,
+      env.SUPABASE_SERVICE_ROLE_KEY || ""
+    );
 
-  const body = JSON.stringify(buildJobsJson(jobs), null, 2);
+    const body = JSON.stringify(buildJobsJson(jobs), null, 2);
 
-  return new Response(body, {
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=600",
-      // Answer engines and third-party tools fetch this from another origin.
-      // Without CORS the document is readable by curl and by nothing in a
-      // browser, which is where most of the tooling that would consume it runs.
-      "Access-Control-Allow-Origin": "*"
-    }
+    return new Response(body, {
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "public, max-age=300, s-maxage=600",
+        // Answer engines and third-party tools fetch this from another origin.
+        // Without CORS the document is readable by curl and by nothing in a
+        // browser, which is where most of the tooling that would consume it runs.
+        "Access-Control-Allow-Origin": "*"
+      }
+    });
   });
 }

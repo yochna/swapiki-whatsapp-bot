@@ -90,28 +90,27 @@ export const freePilotOffer = () => ({
   description: "Free during the current pilot phase"
 });
 
-/**
- * An ordered list of things, for the two places that genuinely have an order:
- * the jobs board and a job page's "other open roles" section.
+/* NOTE: there is deliberately no ItemList helper here any more.
  *
- * A bare @graph of postings tells an engine the postings exist but not that
- * they form a set or which came first. ListItem + position makes the same data
- * citable as a list, which is how "what IT jobs are open on Swapiki" gets
- * answered at all.
+ * An ItemList is not a neutral "here is an ordered set" annotation - in Google's
+ * structured data it IS the carousel markup, and it is only supported next to
+ * one of four content types:
+ *
+ *   "To be eligible for a host carousel rich result for your site, add ItemList
+ *    structured data in combination with one of the following supported
+ *    structured data features: Course list, Movie, Recipe, Restaurant."
+ *    (https://developers.google.com/search/docs/appearance/structured-data/carousel)
+ *
+ * A job board is none of those, so a list of job pages can never become a valid
+ * carousel item. What it did become was a report: Search Console counted every
+ * ListItem as an item on the page and flagged them - "/jobs: 200 items detected,
+ * some are invalid" - because a carousel of JobPostings is not a carousel
+ * Google can show. The markup bought nothing and cost the board a clean report.
+ *
+ * The jobs pages therefore declare no ItemList at all. The set of openings is
+ * still stated the way Google reads it for jobs: one canonical page per posting
+ * (JobPosting on the leaf), linked from the board, and listed in the sitemap.
  */
-export const itemList = (name, items, { id, url } = {}) => ({
-  "@type": "ItemList",
-  ...(id ? { "@id": id } : {}),
-  name,
-  ...(url ? { url } : {}),
-  numberOfItems: items.length,
-  itemListElement: items.map((item, i) => ({
-    "@type": "ListItem",
-    position: i + 1,
-    url: item.url,
-    name: item.name
-  }))
-});
 
 /**
  * The FAQ graph, built from answers that already exist as visible text in

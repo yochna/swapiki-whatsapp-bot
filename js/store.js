@@ -67,6 +67,13 @@ class SwapikiStore {
   constructor() {
     this.key = "swapiki_candidate_data_v2";
     this.maxProjects = 4;
+    // Referral loop (see supabase/referrals_migration.sql): each credited
+    // referral — an invited friend who publishes their own profile — unlocks
+    // extra proof-project slots. Kept small and capped so a recycled invite
+    // can't be farmed into an unlimited profile.
+    this.referralBonusPerReferral = 1;
+    this.referralBonusCap = 2;
+    this.referralStats = { total: 0, credited: 0 };
     this.supabaseUrl = "https://eusbnfgfurrmrccaxbub.supabase.co";
     this.supabaseKey = "sb_publishable_cpyZT7-regpFjo2qmg0uYQ_j6qwoa21";
     this.siteEnv = "prod"; // "prod" | "test" — set by /config at boot
@@ -182,7 +189,6 @@ class SwapikiStore {
       completion_score,
       voice_verified,
       voice_verification_count,
-      staff_reviewed_at,
       updated_at
     `)
       .order('updated_at', { ascending: false });
@@ -192,6 +198,13 @@ class SwapikiStore {
     return data || [];
   }
 
+  /**
+   * Sets a candidate's profile_status. Valid values are 'draft', 'published' and
+   * 'suspended'. 'suspended' is the fraud takedown state: hidden from the public
+   * exactly like a draft, but distinct so an admin can tell a takedown from an
+   * unfinished profile — and, per supabase/suspend_migration.sql, a candidate
+   * cannot restore it themselves.
+   */
   async adminSetProfileStatus(candidateId, status) {
     if (!this.supabase || !this.isAdminUser) throw new Error("Admin access required.");
     const { error } = await this.supabase
@@ -323,6 +336,10 @@ class SwapikiStore {
       this.currentUser = data && data.session ? data.session.user : null;
       if (this.currentUser) {
         await this.loadProfileForUser(this.currentUser);
+        // Load the referral counts before the dashboard first paints, so the
+        // project-slot meter is right the first time instead of jumping to 5/6
+        // after the row loads.
+        await this.getReferralStats();
       }
       return data ? data.session : null;
     } catch (e) {
@@ -451,11 +468,6 @@ class SwapikiStore {
       // statement is evidence for a specific save rather than decoration.
       profileAttestedAt: null,
       profileAttestedName: null,
-      // Human review flag — set only by an admin through the Review action.
-      // Powers the real "Reviewed by the Swapiki team" trust badge; it can
-      // never appear without an actual person marking it. See
-      // adminSetStaffReview() + staff_review_migration.sql.
-      staffReviewedAt: null,
     }
   }
   fromSupabaseRow(row) {
@@ -490,8 +502,7 @@ class SwapikiStore {
       voiceVerifiedAt: row.voice_verified_at || null,
       voiceVerificationCount: row.voice_verification_count || 0,
       profileAttestedAt: row.profile_attested_at || null,
-      profileAttestedName: row.profile_attested_name || null,
-      staffReviewedAt: row.staff_reviewed_at || null
+      profileAttestedName: row.profile_attested_name || null
     };
   }
 
@@ -1109,28 +1120,15 @@ class SwapikiStore {
 
     this.isAdminUser = !!(adminResult && adminResult.data);
 
-    return this.data;
-  }
+    // A visitor who arrived through someone's ?ref= link carries that intent in
+    // localStorage (captureReferralFromUrl, called at boot). Now that the
+    // account exists, hand it to the database once. Fire and forget — a
+    // referral bookkeeping failure must never block a login.
+    if (this.supabase) {
+      this.recordReferralIfPending(user).catch(() => {});
+    }
 
-  /**
-   * Human staff review toggle. Sets/clears staff_reviewed_at — which is the
-   * ONLY thing that can light up the "Reviewed by Swapiki team" badge on a
-   * candidate's public profile. Nothing automatic can ever set this column:
-   * voice verification, completion scores, view counts — none of them touch
-   * it. A real person on the Swapiki team has to click this button, so the
-   * trust badge is always backed by an actual human review, never by an
-   * algorithm. That keeps our "no-AI decisions" promise honest.
-   */
-  async adminSetStaffReview(candidateId, reviewed) {
-    if (!this.supabase || !this.isAdminUser) throw new Error("Admin access required.");
-    const { error } = await this.supabase
-      .from('candidates')
-      .update({
-        staff_reviewed_at: reviewed ? new Date().toISOString() : null
-      })
-      .eq('id', candidateId);
-    if (error) throw error;
-    return true;
+    return this.data;
   }
 
   normalizeData() {
@@ -1149,7 +1147,7 @@ class SwapikiStore {
     // The MFCC "voiceprint" is gone. Drop it from any profile cached by an older
     // build so we stop persisting a biometric we no longer read.
     if (this.data.voiceSignature) delete this.data.voiceSignature;
-    this.data.projects = this.data.projects.slice(0, this.maxProjects);
+    this.data.projects = this.data.projects.slice(0, this.getMaxProjects());
     this.saveData(this.data);
   }
 
@@ -1327,6 +1325,121 @@ class SwapikiStore {
     return /does not exist|could not find the function|schema cache/i.test(String(error.message || ''));
   }
 
+  /**
+   * First-touch referral capture. If this visit arrived through someone's
+   * invite link (https://swapiki.com/?ref=<username>), remember the handle so
+   * it can be attributed once an account is actually created. Deliberately
+   * first-touch: an existing attribution is never overwritten, so a later link
+   * click on the same browser can't steal credit. The value is sanitized to the
+   * same slug shape as a username and ignored if it isn't one.
+   */
+  captureReferralFromUrl() {
+    try {
+      const href = (typeof window !== 'undefined' && window.location && window.location.href)
+        ? String(window.location.href) : '';
+      if (!href) return null;
+      // Matches ?ref=x, &ref=x and a #hash?ref=x all at once; no URL dependency
+      // so this also runs under the Node test sandbox.
+      const match = /[?&#]ref=([^&#]+)/.exec(href);
+      if (!match) return null;
+      const ref = decodeURIComponent(match[1]).trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(ref)) return null;
+      if (!localStorage.getItem('swapiki_ref')) {
+        localStorage.setItem('swapiki_ref', ref);
+      }
+      return ref;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Attributes a stored invite to the now-signed-in account, once. The database
+   * function takes the referred id from auth.uid() and rejects self-referrals,
+   * so this is a relay, not an authority. Returns a small verdict object; a
+   * missing migration is reported (so the console names the file) but never
+   * throws into the login path.
+   */
+  async recordReferralIfPending(user) {
+    try {
+      if (!this.supabase || !user || !user.id) {
+        return { recorded: false, reason: 'unauthenticated' };
+      }
+      let ref = null;
+      try { ref = localStorage.getItem('swapiki_ref'); } catch (e) { ref = null; }
+      if (!ref) return { recorded: false, reason: 'no-ref' };
+
+      // Belt-and-braces: never let someone attribute a referral to themselves.
+      const ownUsername = String((this.data && this.data.username) || '').toLowerCase();
+      if (ownUsername && ref === ownUsername) {
+        try { localStorage.removeItem('swapiki_ref'); } catch (e) {}
+        return { recorded: false, reason: 'self' };
+      }
+
+      const flagKey = 'swapiki_ref_recorded:' + user.id;
+      try { if (localStorage.getItem(flagKey)) return { recorded: false, reason: 'already-recorded' }; } catch (e) {}
+
+      const { data, error } = await this.supabase.rpc('record_referral', { p_referrer_username: ref });
+      if (error) {
+        if (this._isMissingFunction(error)) {
+          console.warn(
+            '⚠️ record_referral is not in the database yet; referrals are not being tracked. ' +
+            'Run supabase/referrals_migration.sql.',
+            error.message
+          );
+        } else {
+          console.warn('⚠️ record_referral failed:', error.message);
+        }
+        return { recorded: false, error: (error && error.message) || 'referral_unavailable' };
+      }
+
+      try {
+        localStorage.setItem(flagKey, '1');
+        localStorage.removeItem('swapiki_ref');
+      } catch (e) {}
+      return (data && typeof data === 'object') ? data : { recorded: true };
+    } catch (e) {
+      console.warn('⚠️ recordReferralIfPending threw:', e);
+      return { recorded: false, error: (e && e.message) || 'referral_unavailable' };
+    }
+  }
+
+  /**
+   * This account's referral counts: { total, credited }. Cached on the instance
+   * so getReferralBonus()/getMaxProjects() can stay synchronous. Returns zeros
+   * (and leaves the previous cache untouched) when signed out or when the
+   * migration hasn't run, so callers never have to special-case it.
+   */
+  async getReferralStats() {
+    if (!this.supabase || !this.currentUser) return { total: 0, credited: 0 };
+    try {
+      const { data, error } = await this.supabase.rpc('my_referral_stats');
+      if (error) {
+        if (!this._isMissingFunction(error)) {
+          console.warn('⚠️ my_referral_stats failed:', error.message);
+        }
+        return { total: 0, credited: 0 };
+      }
+      const credited = Math.max(0, Number(data && data.credited) || 0);
+      const total = Math.max(0, Number(data && data.total) || 0);
+      this.referralStats = { total: total, credited: credited };
+      return this.referralStats;
+    } catch (e) {
+      return { total: 0, credited: 0 };
+    }
+  }
+
+  /** Extra project slots earned from credited referrals, capped. */
+  getReferralBonus() {
+    const credited = (this.referralStats && this.referralStats.credited) || 0;
+    return Math.min(credited * this.referralBonusPerReferral, this.referralBonusCap);
+  }
+
+  /** Effective project-slot cap: the base four plus any referral bonus. */
+  getMaxProjects() {
+    return this.maxProjects + this.getReferralBonus();
+  }
+
   updateProfile(updates) {
     this.data = { ...this.data, ...updates };
     this.recalculateScore();
@@ -1370,8 +1483,9 @@ class SwapikiStore {
   }
 
   addProject(project) {
-    if (this.data.projects.length >= this.maxProjects) {
-      throw new Error(`A profile can contain no more than ${this.maxProjects} projects.`);
+    const maxProjects = this.getMaxProjects();
+    if (this.data.projects.length >= maxProjects) {
+      throw new Error(`A profile can contain no more than ${maxProjects} projects.`);
     }
     const newProject = {
       id: "p_" + Date.now(),
@@ -1576,6 +1690,61 @@ class SwapikiStore {
     }
 
     return { ok: true, id: entry.id };
+  }
+
+  /**
+   * Sends a visitor's report about a public profile to the team.
+   *
+   * The write goes through the Pages Function at POST /api/report-profile, which
+   * stores the row with the service role and pings the admin's Telegram. So the
+   * public client needs no write policy on profile_reports and the report lands
+   * even for a logged-out visitor. Returns { ok, id } or { ok: false, error }.
+   */
+  async reportProfile({ candidateId, reason, details, email, pageUrl } = {}) {
+    if (!candidateId) return { ok: false, error: 'No profile to report.' };
+    try {
+      const res = await fetch('/api/report-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_id: candidateId,
+          reason: reason || 'other',
+          details: details || '',
+          email: email || '',
+          page_url: pageUrl || ''
+        })
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || out.ok === false) {
+        return { ok: false, error: out.error || 'Could not send the report.' };
+      }
+      return { ok: true, id: out.id };
+    } catch (e) {
+      return { ok: false, error: 'Network error — please try again.' };
+    }
+  }
+
+  /** The open profile reports, newest first (requires isAdminUser, enforced by RLS too). */
+  async adminListProfileReports() {
+    if (!this.supabase || !this.isAdminUser) return [];
+    const { data, error } = await this.supabase
+      .from('profile_reports')
+      .select('id, candidate_id, reason, details, reporter_email, page_url, status, created_at')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return data || [];
+  }
+
+  /** Marks a profile report resolved — 'dismissed' when groundless, 'actioned' when acted on. */
+  async adminResolveProfileReport(reportId, status) {
+    if (!this.supabase || !this.isAdminUser) throw new Error('Admin access required.');
+    const { error } = await this.supabase
+      .from('profile_reports')
+      .update({ status: status || 'reviewed', reviewed_at: new Date().toISOString() })
+      .eq('id', reportId);
+    if (error) throw error;
   }
 
   /** Admin view of all submitted feedback (requires isAdminUser, enforced by RLS too). */

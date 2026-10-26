@@ -39,8 +39,11 @@
 // the board — it just carries no structured salary or listing data.
 
 import {
-  DEFAULT_SUPABASE_URL, esc, safeApplyUrl, jsonLdBlock, fetchPublishedJobs, jobSlug
+  DEFAULT_SUPABASE_URL, esc, safeApplyUrl, jsonLdBlock, fetchPublishedJobs, fetchBoardPage, jobSlug
 } from "./lib/jobs-feed.js";
+import { shareRow } from "./lib/share.js";
+import { injectJobCount } from "./lib/job-count.js";
+import { cacheMatch, cachePut, cacheState, withCacheState } from "./lib/page-cache.js";
 
 export const META = {
   title: "Swapiki Jobs — IT, BFSI &amp; Internships in India",
@@ -48,11 +51,17 @@ export const META = {
     "Hand-sourced IT, BFSI and other openings across India on Swapiki Jobs. Apply with a proof-backed profile — real projects and a 2-minute voice walkthrough, no AI screening."
 };
 
-// The visible list written into the shell is capped. The full board already sits
-// in the JSON-LD graph and in the sitemap; a page does not need a link to every
-// one of several thousand jobs to be crawlable, and a document that is already
-// multi-megabyte should not grow a second copy of itself. The cap is generous
-// enough that a crawler still sees a real, populated board.
+// The board draws this many cards, and fetches exactly this many rows - one
+// request, one page, never the whole corpus. The exact published total comes
+// back with that same request, so the page can still say "the first 200 of N"
+// instead of pretending there are only 200.
+//
+// What the cap leaves out stays crawlable elsewhere: every job has its own
+// /jobs/<slug> page carrying its own JobPosting, and functions/sitemap.xml.js
+// lists all of them. The graph on this page must not describe several thousand
+// jobs a reader cannot see - structured data that disagrees with the visible
+// page is what earns a structured-data penalty, and at 6,000+ jobs it also cost
+// this route seconds of server time and a multi-megabyte document.
 const SHELL_LIST_CAP = 200;
 
 const CATEGORY_ORDER = ["it", "bfsi", "any"];
@@ -91,6 +100,10 @@ const jobCard = (j) => {
   const applyUrl = safeApplyUrl(j.apply_url);
   const title = esc(j.title);
   const href = `/jobs/${jobSlug(j)}`;
+  // Share the job's own page, not the board — that is the URL a reader passes on
+  // and the one the per-job page canonicalises to. Rendered here as well as in
+  // the SPA because this board is what a no-JS visitor sees before the app boots.
+  const share = shareRow(`https://swapiki.com${href}`, `${j.title}${j.company ? " at " + j.company : ""}`);
   return `
       <div style="border:1px solid #E2E8F0;border-radius:14px;padding:18px 20px;margin-bottom:14px;background:#fff;">
         <a href="${esc(href)}"
@@ -106,6 +119,7 @@ const jobCard = (j) => {
               : ""
           }
         </div>
+        ${share}
       </div>`;
 };
 
@@ -131,7 +145,8 @@ const renderBoardRows = (jobs) => (jobs.length
  * change upstream degrades to "correct tags, missing structured data" rather
  * than a broken or empty page.
  */
-const injectJobsShell = (html, jobs) => {
+export const injectJobsShell = (html, jobs, total) => {
+  const shown = jobs.slice(0, SHELL_LIST_CAP);
   let out = html
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${META.title}</title>`)
     .replace(
@@ -147,23 +162,32 @@ const injectJobsShell = (html, jobs) => {
       '<meta property="og:url" content="https://swapiki.com/jobs" />'
     );
 
+  // index.html is the site-wide shell, so it carries the homepage's "500+ job
+  // listings" copy into this route too. Rewrite it with the exact total read
+  // from the same board request — the same figure functions/index.js writes on
+  // /. A no-op when the total is unavailable, so this never states a wrong size.
+  out = injectJobCount(out, total);
+
   // Fill the mount point only when there are listings to show. Injecting the
   // empty-state message into a page that will boot the SPA would flash "No open
   // positions" at every visitor whenever the board read failed, which is a claim
   // about the world this request cannot make. The SPA replaces the container
   // wholesale on boot, so a visitor with JS still gets the interactive board.
-  if (jobs.length) {
-    const shown = jobs.slice(0, SHELL_LIST_CAP);
-    const more = jobs.length > shown.length
-      ? `<p style="font-size:13px;color:#64748B;margin-top:20px;">Showing the first ${shown.length} of ${jobs.length} openings. <a href="/#jobs" style="color:#1E3A8A;font-weight:700;text-decoration:none;">Open the live board</a> to search them all.</p>`
-      : "";
+  if (shown.length) {
+    // The number shown is the number fetched, so the honest part of this line is
+    // `total`, read from the same request. When the count is unavailable the line
+    // is dropped rather than printed with a total the route does not have.
+    const more =
+      total > shown.length
+        ? `<p style="font-size:13px;color:#64748B;margin-top:20px;">Showing the first ${shown.length} of ${total} openings. <a href="/#jobs" style="color:#1E3A8A;font-weight:700;text-decoration:none;">Open the live board</a> to search them all.</p>`
+        : "";
     out = out.replace(
       /<div id="jobs-container"><\/div>/i,
       `<div id="jobs-container">${renderBoardRows(shown)}${more}</div>`
     );
   }
 
-  const block = jsonLdBlock(jobs);
+  const block = jsonLdBlock();
   if (/<\/head>/i.test(out)) return out.replace(/<\/head>/i, `  ${block}\n</head>`);
   if (/<\/body>/i.test(out)) return out.replace(/<\/body>/i, `  ${block}\n</body>`);
   return out + block;
@@ -200,7 +224,7 @@ const renderStaticFallback = (jobs) => {
 <meta name="twitter:title" content="${META.title}"/>
 <meta name="twitter:description" content="${esc(META.description)}"/>
 <meta name="twitter:image" content="https://swapiki.com/assets/og-image.png"/>
-${jsonLdBlock(jobs)}
+${jsonLdBlock()}
 </head>
 <body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#0F172A;">
   <div style="max-width:800px;margin:0 auto;padding:32px 20px 64px;">
@@ -235,36 +259,51 @@ ${jsonLdBlock(jobs)}
 export async function onRequestGet(context) {
   const { env, request } = context;
   const supabaseUrl = env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const jobs = await fetchPublishedJobs(supabaseUrl, env.SUPABASE_SERVICE_ROLE_KEY || "");
+  const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const headers = {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "public, max-age=300, s-maxage=600",
+    // HIT, MISS or OFF - see functions/lib/page-cache.js. Every one of these
+    // routes answers the same way; the header is how a fetch can tell a warmed
+    // edge from a route that had nowhere warm to look.
+    "x-swapiki-cache": cacheState(context)
+  };
 
-  // Primary path: serve the real SPA so the interactive board boots, with the
-  // structured data injected. A failure here falls back to the static list rather
-  // than erroring, because a broken /jobs is worse than a plain one.
+  // A warm edge copy answers without running anything below. Every hit for the
+  // next ten minutes is one lookup instead of a database round trip.
+  const warm = await cacheMatch(context);
+  if (warm) return withCacheState(warm, "HIT");
+
   const shellUrl = new URL("/index.html", request ? request.url : "https://swapiki.com/jobs");
+  let res = null;
   try {
     if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
       const assetRes = await env.ASSETS.fetch(shellUrl);
       if (assetRes && assetRes.ok) {
         const html = await assetRes.text();
         if (html && /jobs-container/.test(html)) {
-          return new Response(injectJobsShell(html, jobs), {
-            headers: {
-              "Content-Type": "text/html; charset=utf-8",
-              "Cache-Control": "public, max-age=300, s-maxage=600"
-            }
-          });
+          // One request for the rows this page draws and the exact total. The
+          // whole published corpus is not read just to render 200 cards.
+          const { jobs, total } = await fetchBoardPage(supabaseUrl, serviceKey, SHELL_LIST_CAP);
+          res = new Response(injectJobsShell(html, jobs, total), { headers });
         }
       }
-      console.warn("[jobs] could not load index.html from assets; serving the static board instead.");
+      if (!res) {
+        console.warn("[jobs] could not load index.html from assets; serving the static board instead.");
+      }
     }
   } catch (err) {
     console.warn("[jobs] index.html fetch threw:", err && err.message);
   }
 
-  return new Response(renderStaticFallback(jobs), {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=600"
-    }
-  });
+  if (res) {
+    await cachePut(context, res);
+    return res;
+  }
+
+  // Asset binding broken: this page is the only board a visitor gets, so it does
+  // need every published job. It is not cached - a degraded page served from the
+  // edge for ten minutes is worse than a slow one served once.
+  const jobs = await fetchPublishedJobs(supabaseUrl, serviceKey);
+  return new Response(renderStaticFallback(jobs), { headers });
 }

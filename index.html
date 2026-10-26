@@ -5,9 +5,13 @@
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
   <title>Swapiki Jobs — Job Board &amp; Internships in India</title>
-  <meta name="description" content="Swapiki Jobs — a job board and internships in India. Browse hand-sourced roles and apply with a proof-backed profile: real projects and a 2-minute voice walkthrough, read by hiring managers, never scored or screened by AI." />
+  <meta name="description" content="Explore curated tech jobs and internships across India on Swapiki. Apply with a real project proof and a 2‑minute voice walkthrough to stand out.">
+  <meta name="keywords" content="jobs, internships, India, tech jobs, startup jobs, remote jobs, Swapiki" />
+  <meta property="og:locale" content="en_IN" />
+  <link rel="alternate" hreflang="en-in" href="https://swapiki.com/" />
   <link rel="canonical" href="https://swapiki.com/" />
   <meta name="robots" content="index, follow" />
+  <meta name="google-site-verification" content="99IkAr0NGOwG0rmwpJfjo_eU-W1YyJqVDLY3UGa6nrA" />
 
   <!-- Open Graph (Facebook, LinkedIn, WhatsApp, etc.) -->
   <meta property="og:type" content="website" />
@@ -50,8 +54,21 @@
         "name": "Swapiki",
         "url": "https://swapiki.com/",
         "inLanguage": "en-IN",
-        "publisher": { "@id": "https://swapiki.com/#organization" }
+        "publisher": { "@id": "https://swapiki.com/#organization" },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://swapiki.com/search?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
       },
+        {
+          "@type": "BreadcrumbList",
+          "@id": "https://swapiki.com/#breadcrumb",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://swapiki.com/" },
+            { "@type": "ListItem", "position": 2, "name": "Jobs", "item": "https://swapiki.com/jobs" }
+          ]
+        },
       {
         "@type": "WebApplication",
         "@id": "https://swapiki.com/#app",
@@ -77,7 +94,10 @@
         "description": "Swapiki Jobs — a job board and internships in India. Browse hand-sourced roles and apply with a proof-backed profile: real projects and a 2-minute voice walkthrough, read by hiring managers, never scored or screened by AI.",
         "isPartOf": { "@id": "https://swapiki.com/#website" },
         "about": { "@id": "https://swapiki.com/#organization" },
-        "primaryImageOfPage": { "@id": "https://swapiki.com/#app" }
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "url": "https://swapiki.com/assets/logo/logo-horizontal.svg"
+        }
       },
       {
         "@type": "FAQPage",
@@ -169,7 +189,7 @@
        in parallel with the HTML instead of only after it parses. Execution
        order is still guaranteed by the defer tags below. -->
   <link rel="preload" as="script" href="/vendor/supabase.min.js?v=20260924x" />
-  <link rel="preload" as="script" href="/dist/js/app.js?v=20261012b" />
+  <link rel="preload" as="script" href="/dist/js/app.js?v=20261014m" />
 
   <!-- Google Identity Services (Sign In With Google) — the script itself is
        loaded dynamically by app.js ONLY on the production domain (swapiki.com).
@@ -223,7 +243,7 @@
        compiler to the browser and recompiles styles on every DOM change.
        That's the #1 cause of this app feeling laggy — a real build removes
        that entirely and ships a plain, cached, ~50KB CSS file instead. -->
-  <link rel="stylesheet" href="/dist/output.css?v=20261006a" />
+  <link rel="stylesheet" href="/dist/output.css?v=20261014m" />
 
   <style>
     body {
@@ -317,6 +337,751 @@
 
     .animate-marquee:hover {
       animation-play-state: paused;
+    }
+
+    /* =====================================================================
+       FIRST-VISIT INTRO  -  the ring assembles
+
+       A title sequence, shown once per browser to a signed-out visitor
+       before the landing page. While it owns the screen every other body
+       child is visibility:hidden, so the page is laid out behind it but
+       never seen; the stage then pushes forward, flashes, and the page is
+       simply there.
+
+       Performance contract for this block:
+         - only transform/opacity animate on DOM nodes (compositor work);
+         - no filter, blur, backdrop-filter, drop-shadow, box-shadow or
+           width/height animation anywhere - each one forces a repaint of
+           the animated layer on every frame, which is what made the old
+           intro stutter on mid-range phones;
+         - the live motion comes from one 2D canvas (see the controller),
+           which is cheap, capped in particle count and driven by the same
+           pause-aware clock;
+         - the wordmark is only built once Fraunces has loaded, so it never
+           reflows mid-rise.
+
+       --intro-ms is the single knob (see INTRO_MS in the inline controller).
+       ===================================================================== */
+    .app-splash-voice {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(22px, 4vh, 34px);
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(ellipse 90% 70% at 50% 42%, #FFFBF6 0%, #F7F3EC 58%, #F1EBE1 100%);
+      overflow: hidden;
+    }
+
+    .app-splash-voice.is-active {
+      animation: voice-fade-in .55s cubic-bezier(.22, 1, .36, 1) forwards;
+    }
+
+    .app-splash-voice.is-leaving {
+      animation: voice-fade-out .42s cubic-bezier(.4, 0, 1, 1) forwards;
+    }
+
+    /* A single thin ring draws around the bars, with one slow orbiting
+       highlight. It is the only decoration - no extra layers, no blur. */
+    .app-splash-voice-orb {
+      position: absolute;
+      width: clamp(250px, 44vmin, 330px);
+      height: clamp(250px, 44vmin, 330px);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 122, 54, .10) 0%, rgba(255, 160, 80, .05) 46%, transparent 68%);
+      opacity: 0;
+      transform: scale(.88);
+      z-index: 1;
+    }
+
+    .app-splash-voice-orb::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(from 90deg, transparent 0deg, rgba(255, 106, 43, .0) 12deg, rgba(255, 106, 43, .65) 72deg, transparent 142deg);
+      -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+      mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+      animation: voice-ring-spin 3.4s linear infinite;
+    }
+
+    .app-splash-voice-orb::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(23, 19, 14, .07);
+    }
+
+    .app-splash-voice.is-active .app-splash-voice-orb {
+      animation: voice-orb-in .95s cubic-bezier(.22, 1, .36, 1) forwards;
+    }
+
+    .app-splash-voice-bars {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(10px, 1.7vw, 16px);
+      height: clamp(86px, 15vmin, 124px);
+      opacity: 0;
+      transform: translateY(14px) scale(.94);
+    }
+
+    .app-splash-voice.is-active .app-splash-voice-bars {
+      animation: voice-bars-in .72s cubic-bezier(.22, 1, .36, 1) .14s forwards;
+    }
+
+    .app-splash-voice.is-leaving .app-splash-voice-bars {
+      animation: voice-bars-out .22s ease-in forwards;
+    }
+
+    .app-splash-voice-bar {
+      width: 6px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #FFC9A3 0%, #FF8A4B 44%, #F04E0E 100%);
+      animation: voice-bar-shimmer 1.4s ease-in-out infinite;
+      transform-origin: center;
+      will-change: transform;
+    }
+
+    .app-splash-voice-bar:nth-child(1) { height: 12%; animation-delay: 0s; }
+    .app-splash-voice-bar:nth-child(2) { height: 26%; animation-delay: .04s; }
+    .app-splash-voice-bar:nth-child(3) { height: 48%; animation-delay: .08s; }
+    .app-splash-voice-bar:nth-child(4) { height: 74%; animation-delay: .12s; }
+    .app-splash-voice-bar:nth-child(5) { height: 100%; animation-delay: .16s; }
+    .app-splash-voice-bar:nth-child(6) { height: 74%; animation-delay: .12s; }
+    .app-splash-voice-bar:nth-child(7) { height: 48%; animation-delay: .08s; }
+    .app-splash-voice-bar:nth-child(8) { height: 26%; animation-delay: .04s; }
+    .app-splash-voice-bar:nth-child(9) { height: 12%; animation-delay: 0s; }
+
+    .app-splash-voice-sub {
+      position: relative;
+      z-index: 2;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-weight: 500;
+      font-size: clamp(.64rem, 1.1vw, .76rem);
+      letter-spacing: .6em;
+      text-transform: uppercase;
+      color: rgba(23, 19, 14, .5);
+      opacity: 0;
+      transform: translateY(12px);
+      text-align: center;
+      padding: 0 22px;
+    }
+
+    .app-splash-voice.is-active .app-splash-voice-sub {
+      animation: voice-sub-slide .62s cubic-bezier(.22, 1, .36, 1) .42s forwards;
+    }
+
+    .app-splash-voice.is-leaving .app-splash-voice-sub {
+      animation: voice-sub-fade .2s ease-in forwards;
+    }
+
+    .app-splash-voice-brand {
+      position: relative;
+      z-index: 2;
+      font-family: 'Fraunces', 'Times New Roman', serif;
+      font-weight: 700;
+      font-size: clamp(1.5rem, 4.6vw, 2.9rem);
+      letter-spacing: -.02em;
+      color: transparent;
+      background: linear-gradient(100deg, #17130E 0%, #2A211A 52%, #FF6A2B 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      opacity: 0;
+      transform: translateY(10px);
+      clip-path: inset(0 0 100% 0);
+      margin-top: clamp(0px, 0.6vh, 3px);
+    }
+
+    .app-splash-voice.is-active .app-splash-voice-brand {
+      animation: voice-brand-rise .7s cubic-bezier(.22, 1, .36, 1) .78s forwards;
+    }
+
+    .app-splash-voice.is-leaving .app-splash-voice-brand {
+      animation: voice-brand-exit .28s cubic-bezier(.4, 0, 1, 1) forwards;
+    }
+
+    @keyframes voice-ring-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes voice-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes voice-fade-out {
+      from { opacity: 1; transform: scale(1); }
+      to { opacity: 0; transform: scale(1.03); }
+    }
+
+    @keyframes voice-orb-in {
+      from { opacity: 0; transform: scale(.88); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes voice-bars-in {
+      from { opacity: 0; transform: translateY(14px) scale(.94); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes voice-bars-out {
+      from { opacity: 1; transform: scaleY(1); }
+      to { opacity: 0; transform: scaleY(.35); }
+    }
+
+    @keyframes voice-bar-shimmer {
+      0%, 100% { transform: scaleY(.5); opacity: .55; }
+      22% { transform: scaleY(1); opacity: 1; }
+      46% { transform: scaleY(.62); opacity: .8; }
+      68% { transform: scaleY(.92); opacity: .95; }
+      86% { transform: scaleY(.7); opacity: .85; }
+    }
+
+    @keyframes voice-sub-slide {
+      from { opacity: 0; transform: translateY(12px); letter-spacing: .6em; }
+      to { opacity: 1; transform: translateY(0); letter-spacing: .4em; }
+    }
+
+    @keyframes voice-sub-fade {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+
+    @keyframes voice-brand-rise {
+      0% { opacity: 0; transform: translateY(10px); clip-path: inset(0 0 100% 0); }
+      55% { opacity: 1; }
+      100% { opacity: 1; transform: translateY(0); clip-path: inset(0 0 -12% 0); }
+    }
+
+    @keyframes voice-brand-exit {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-8px); }
+    }
+
+    /* The push-forward that hands the screen to the page. */
+    .app-splash.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: scale(1.16);
+    }
+
+    .app-splash-stage {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* The only genuinely moving layer: a slow field of motes that converge
+       into the ring, orbit it, and open back up at the end. */
+    .app-splash-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      opacity: 0;
+      animation: splash-fade-in 1.2s ease-out .1s forwards;
+    }
+
+    /* Warm bloom. Static gradient, opacity-only breathing: scaling a
+       full-screen gradient makes the compositor re-rasterise it every tick. */
+    .app-splash-glow {
+      position: absolute;
+      left: 50%;
+      top: 44%;
+      width: 118vmax;
+      height: 118vmax;
+      margin: -59vmax 0 0 -59vmax;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(217, 72, 31, .22) 0%, rgba(217, 72, 31, .07) 24%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(201, 162, 39, .10) 0%, transparent 38%);
+      opacity: .75;
+      animation: splash-breathe 9s ease-in-out infinite;
+      will-change: opacity;
+    }
+
+    @keyframes splash-breathe {
+      0%, 100% { opacity: .68; }
+      50% { opacity: 1; }
+    }
+
+    /* Technical grid, painted once and masked hard toward the edges. */
+    .app-splash-grid {
+      position: absolute;
+      inset: 0;
+      opacity: .55;
+      background-image:
+        linear-gradient(rgba(247, 243, 236, .03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(247, 243, 236, .03) 1px, transparent 1px);
+      background-size: 72px 72px;
+      -webkit-mask-image: radial-gradient(circle at 50% 44%, #000 0%, rgba(0, 0, 0, .4) 48%, transparent 74%);
+      mask-image: radial-gradient(circle at 50% 44%, #000 0%, rgba(0, 0, 0, .4) 48%, transparent 74%);
+    }
+
+    .app-splash-vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 46%, transparent 30%, rgba(0, 0, 0, .62) 100%);
+      pointer-events: none;
+    }
+
+    .app-splash-lockup {
+      display: none !important;
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 24px;
+      transform: translateY(-1.2vh);
+    }
+
+    /* Outer box is never transformed: the controller measures it to place
+       the particle ring exactly on the arcs. The entry animation lives on
+       the inner box. */
+    .app-splash-orb {
+      position: relative;
+      width: clamp(196px, 34vmin, 300px);
+      height: clamp(196px, 34vmin, 300px);
+      margin-bottom: clamp(22px, 4vh, 40px);
+      flex: none;
+    }
+
+    .app-splash-orb-in {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      animation: splash-orb-in 1.25s var(--sp-ease) .05s forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes splash-orb-in {
+      0% { opacity: 0; transform: scale(.76) rotate(-12deg); }
+      48% { opacity: 1; }
+      100% { opacity: 1; transform: scale(1) rotate(0deg); }
+    }
+
+    /* A shaft of light that fires up through the ring as it closes. Pure
+       scaleY/opacity on a 2px strip - free. */
+    .app-splash-beam {
+      position: absolute;
+      left: 50%;
+      top: -38%;
+      bottom: -38%;
+      width: 3px;
+      margin-left: -1.5px;
+      pointer-events: none;
+      background: linear-gradient(180deg,
+        transparent 0%, rgba(255, 122, 54, .6) 34%,
+        rgba(255, 253, 249, .98) 50%, rgba(255, 122, 54, .6) 66%, transparent 100%);
+      transform: scaleY(0);
+      transform-origin: 50% 50%;
+      opacity: 0;
+      animation: splash-beam 1.9s cubic-bezier(.2, .9, .2, 1) .9s forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes splash-beam {
+      0% { transform: scaleY(0); opacity: 0; }
+      14% { opacity: 1; }
+      48% { transform: scaleY(1); opacity: .6; }
+      100% { transform: scaleY(1.6); opacity: 0; }
+    }
+
+    /* Two hairline rings, counter-rotating, drawing themselves in with
+       stroke-dashoffset - the classic "instrument coming online" move. They
+       are small (~300px) so the paint cost is trivial. */
+    .app-splash-arc {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      animation: splash-spin 46s linear infinite;
+      will-change: transform;
+    }
+
+    .app-splash-arc--inner {
+      animation: splash-spin-rev 64s linear infinite;
+    }
+
+    @keyframes splash-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes splash-spin-rev {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(-360deg); }
+    }
+
+    .app-splash-arc-track {
+      fill: none;
+      stroke: rgba(247, 243, 236, .11);
+      stroke-width: 1;
+      stroke-linecap: round;
+      stroke-dasharray: .5 8.5;
+    }
+
+    .app-splash-arc-draw {
+      fill: none;
+      stroke: var(--sp-accent);
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-dasharray: 704;
+      stroke-dashoffset: 704;
+      opacity: 0;
+      animation: splash-draw 2.3s cubic-bezier(.22, 1, .36, 1) .25s forwards;
+    }
+
+    .app-splash-arc--inner .app-splash-arc-draw {
+      stroke: rgba(240, 120, 79, .8);
+      stroke-width: 1.1;
+      stroke-dasharray: 603;
+      stroke-dashoffset: 603;
+      animation: splash-draw-inner 2.8s cubic-bezier(.22, 1, .36, 1) .6s forwards;
+    }
+
+    @keyframes splash-draw {
+      0% { stroke-dashoffset: 704; opacity: 0; }
+      10% { opacity: .95; }
+      100% { stroke-dashoffset: 118; opacity: .85; }
+    }
+
+    @keyframes splash-draw-inner {
+      0% { stroke-dashoffset: 603; opacity: 0; }
+      10% { opacity: .9; }
+      100% { stroke-dashoffset: 92; opacity: .6; }
+    }
+
+    /* A shockwave off the ring every few seconds: the beat that tells you the
+       instrument is live, and the reason the long hold never reads as a still.
+       Border + transform + opacity only. */
+    .app-splash-pulse {
+      position: absolute;
+      inset: 4%;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 122, 54, .5);
+      opacity: 0;
+      pointer-events: none;
+      animation: splash-pulse 3.8s cubic-bezier(.2, .7, .3, 1) 1.0s infinite;
+      will-change: transform, opacity;
+    }
+
+    .app-splash-pulse--late {
+      animation-delay: 2.8s;
+    }
+
+    @keyframes splash-pulse {
+      0% { opacity: 0; transform: scale(.78); }
+      10% { opacity: .6; }
+      100% { opacity: 0; transform: scale(1.62); }
+    }
+
+    /* The real site mark: same artwork as the header logo, tile stripped so
+       the cream glyph sits straight on the dark stage. No filter on it - a
+       drop-shadow would be recomputed on every frame of the entry scale. */
+    .app-splash-mark {
+      position: relative;
+      z-index: 2;
+      width: clamp(58px, 9.4vmin, 82px);
+      height: clamp(58px, 9.4vmin, 82px);
+      display: block;
+      opacity: 0;
+      animation: splash-mark-in 1.15s var(--sp-ease) .55s forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes splash-mark-in {
+      0% { opacity: 0; transform: translateY(12px) scale(.62); }
+      52% { opacity: 1; }
+      78% { transform: translateY(0) scale(1.08); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* The wordmark: each letter is masked and rises into place on its own
+       beat. Letters are inserted by the controller only after the face has
+       loaded, so there is no Georgia-to-Fraunces swap mid-animation. */
+    .app-splash-word {
+      display: flex;
+      justify-content: center;
+      font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+      font-size: clamp(3rem, 9.6vw, 5.6rem);
+      font-weight: 650;
+      letter-spacing: -.048em;
+      line-height: .92;
+      color: #FFFDF9;
+      font-optical-sizing: auto;
+    }
+
+    .app-splash-ltr {
+      display: inline-block;
+      overflow: hidden;
+      padding: .12em 0 .24em;
+      margin: -.12em 0 -.24em;
+    }
+
+    .app-splash-ltr > span {
+      display: inline-block;
+      transform: translateY(122%) scale(.94);
+      opacity: 0;
+      animation: splash-ltr 1.05s var(--sp-ease) forwards;
+      will-change: transform, opacity;
+    }
+
+    @keyframes splash-ltr {
+      0% { transform: translateY(145%) scale(.88); opacity: 0; color: #FF5A1A; text-shadow: 0 0 0 rgba(240, 120, 79, 0); }
+      38% { opacity: 1; color: #FF7A36; text-shadow: 0 0 28px rgba(240, 120, 79, .38); }
+      66% { color: #FFF5EC; text-shadow: 0 18px 60px rgba(255, 245, 236, .16); }
+      100% { transform: translateY(0) scale(1); opacity: 1; color: #FFFDF9; text-shadow: 0 22px 70px rgba(0, 0, 0, .6); }
+    }
+
+    /* A hairline that draws out from the centre, with a light packet that
+       runs along it every few seconds. scaleX and translateX only. */
+    .app-splash-rule {
+      position: relative;
+      width: min(320px, 74vw);
+      height: 1px;
+      margin: clamp(18px, 3.2vh, 30px) 0 clamp(14px, 2.4vh, 20px);
+      background: linear-gradient(90deg, transparent, rgba(247, 243, 236, .38) 16%, rgba(247, 243, 236, .38) 84%, transparent);
+      overflow: hidden;
+      transform: scaleX(0);
+      opacity: 0;
+      animation: splash-rule-in 1s var(--sp-ease) 1.6s forwards;
+    }
+
+    .app-splash-rule::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 34%;
+      background: linear-gradient(90deg, transparent, rgba(240, 120, 79, .95), transparent);
+      transform: translateX(-140%);
+      animation: splash-sheen 5.6s cubic-bezier(.55, 0, .25, 1) 3.6s infinite;
+      will-change: transform;
+    }
+
+    @keyframes splash-rule-in {
+      0% { transform: scaleX(0); opacity: 0; }
+      100% { transform: scaleX(1); opacity: 1; }
+    }
+
+    @keyframes splash-sheen {
+      0% { transform: translateX(-140%); }
+      26%, 100% { transform: translateX(430%); }
+    }
+
+    /* Tagline rotator. The controller adds .is-on / .is-out; the container
+       reserves height so the stage never reflows as lines change. */
+    .app-splash-taglines {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 1.9em;
+      width: 100%;
+      opacity: 0;
+      animation: splash-fade-in .8s ease 2.25s forwards;
+    }
+
+    .app-splash-tagline {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, calc(-50% + 8px));
+      white-space: nowrap;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: clamp(.58rem, 1.35vw, .76rem);
+      letter-spacing: .26em;
+      text-transform: uppercase;
+      color: rgba(247, 243, 236, .72);
+      opacity: 0;
+      transition: opacity 1.05s var(--sp-ease), transform 1.05s var(--sp-ease);
+    }
+
+    .app-splash-tagline.is-on {
+      opacity: 1;
+      transform: translate(-50%, -50%);
+    }
+
+    .app-splash-tagline.is-out {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% - 8px));
+    }
+
+    /* Skip control - always reachable, however long the intro runs. */
+    .app-splash-skip {
+      position: absolute;
+      right: clamp(16px, 4vw, 40px);
+      bottom: clamp(18px, 5vh, 40px);
+      z-index: 4;
+      appearance: none;
+      border: 1px solid rgba(247, 243, 236, .18);
+      border-radius: 999px;
+      background: rgba(20, 16, 12, .55);
+      color: rgba(247, 243, 236, .7);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: .66rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      padding: 10px 18px;
+      cursor: pointer;
+      opacity: 0;
+      animation: splash-fade-in .8s var(--sp-ease) .7s forwards;
+      transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .app-splash-skip:hover,
+    .app-splash-skip:focus-visible {
+      color: #F7F3EC;
+      border-color: rgba(240, 120, 79, .6);
+      background: rgba(217, 72, 31, .18);
+      outline: none;
+    }
+
+    @keyframes splash-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* Progress hairline. scaleX, not width: width animation relayouts and
+       repaints the whole track on every frame. */
+    .app-splash-progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      background: rgba(247, 243, 236, .08);
+      overflow: hidden;
+      z-index: 3;
+    }
+
+    .app-splash-progress-bar {
+      height: 100%;
+      width: 100%;
+      transform: scaleX(0);
+      transform-origin: 0 50%;
+      background: linear-gradient(90deg, #8F2A0E 0%, #D9481F 55%, #F0784F 100%);
+      animation: splash-progress var(--intro-ms, 30000ms) linear forwards;
+      will-change: transform;
+    }
+
+    @keyframes splash-progress {
+      0% { transform: scaleX(0); }
+      100% { transform: scaleX(1); }
+    }
+
+    /* The cut: a warm bloom off the mark as the stage pushes through. */
+    .app-splash-burst {
+      position: absolute;
+      inset: -30%;
+      z-index: 2147483647;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(circle at 50% 44%,
+        #ffffff 0%,
+        rgba(255, 255, 255, .95) 6%,
+        rgba(255, 106, 42, .9) 18%,
+        rgba(217, 72, 31, .28) 42%,
+        transparent 78%);
+      mix-blend-mode: screen;
+    }
+
+    .app-splash.is-cutting .app-splash-burst {
+      animation: splash-burst .42s cubic-bezier(.14, 0, .2, 1) both;
+    }
+
+    @keyframes splash-burst {
+      0% { opacity: 0; transform: scale(.36); }
+      9% { opacity: .72; transform: scale(.78); }
+      22% { opacity: .38; transform: scale(1.1); }
+      100% { opacity: 0; transform: scale(2.1); }
+    }
+
+    /* The timeline freezes while the tab is in the background, so nobody
+       returns to an intro that played without them. The canvas is driven by
+       the same clock, so it freezes too. */
+    .app-splash.is-paused,
+    .app-splash.is-paused * {
+      animation-play-state: paused !important;
+    }
+
+    /* While the splash owns the screen nothing else is painted and the page
+       cannot scroll. visibility (not display) keeps the landing page laid
+       out, so its reveal needs no reflow. scrollbar-gutter reserves the
+       track so hiding overflow can't shift the page sideways at reveal. */
+    html:has(body.splash-active) {
+      scrollbar-gutter: stable;
+    }
+
+    body.splash-active {
+      overflow: hidden;
+    }
+
+    body.splash-active > *:not(#app-splash) {
+      visibility: hidden;
+    }
+
+    /* The landing page fades up under the push-through. Opacity only: a
+       transform here would make every position:fixed child of the view
+       reposition itself against the section instead of the viewport. */
+    body.splash-reveal .view-section.active-view {
+      animation: splash-app-in .85s cubic-bezier(.22, 1, .36, 1) both;
+    }
+
+    @keyframes splash-app-in {
+      0% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+
+    @media (max-height: 560px) {
+      .app-splash-orb { width: 148px; height: 148px; margin-bottom: 12px; }
+      .app-splash-word { font-size: clamp(2rem, 8vw, 3rem); }
+      .app-splash-rule { margin: 10px 0 8px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .app-splash, .app-splash * {
+        animation-duration: .01ms !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+
+      .app-splash-arc { animation: none !important; }
+    .app-splash-beam { display: none; }
+    .app-splash-pulse { display: none; }
+    .app-splash-burst { display: none; }
+      .app-splash-orb-in { opacity: 1; transform: none; }
+      .app-splash-mark { opacity: 1; transform: none; }
+      .app-splash-ltr > span { opacity: 1; transform: none; }
+      .app-splash-rule { transform: none; opacity: 1; }
+      .app-splash-rule::after { display: none; }
+      .app-splash-taglines { opacity: 1; }
+      .app-splash-tagline.is-on { opacity: 1; transform: translate(-50%, -50%); }
+      .app-splash-skip { opacity: 1; }
+      .app-splash-canvas { opacity: 1; }
+      .app-splash-progress-bar { transform: scaleX(1); }
+      body.splash-reveal .view-section.active-view { animation: none; }
     }
 
     /* Admin dashboard polish */
@@ -429,20 +1194,82 @@
     }
   </style>
   <style>
-    /* =====================================================================
-       LANDING PAGE REDESIGN — editorial system (paper / ink / burnt-orange).
-       Scoped entirely under #view-landing, plus chrome overrides on the
-       shared top banner (#site-topbar), header (#site-header) and footer
-       (#site-footer) so the marketing surface reads as one piece. Nothing
-       here leaks into the dashboard / admin / profile views' Tailwind
-       styling.
+    /* ================= LANDING PAGE REDESIGN ================= */
+    /* Landing page scroll-reveal animations */
+    #view-landing [data-reveal] {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      will-change: opacity, transform;
+    }
 
-       Copy rule for this section: describe the product, never manufacture
-       evidence. No invented statistics, no attributed "sources", no
-       fabricated testimonials or review scores. The trust language matches
-       the shipped behaviour - the audio check proves a live recording, not
-       a person's identity, and nothing on Swapiki is AI-scored.
-       ===================================================================== */
+    #view-landing [data-reveal="fade"] {
+      transform: none;
+    }
+
+    #view-landing [data-reveal="scale"] {
+      transform: scale(0.98) translateY(20px);
+    }
+
+    #view-landing [data-reveal].is-inview {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    #view-landing [data-reveal="scale"].is-inview {
+      transform: scale(1) translateY(0);
+    }
+
+    #view-landing [data-reveal="fade"].is-inview {
+      opacity: 1;
+    }
+
+    #view-landing .lp-step[data-reveal],
+    #view-landing .lp-stat[data-reveal],
+    #view-landing .lp-card[data-reveal] {
+      transition-delay: calc(var(--reveal-delay, 0) * 0.1s);
+    }
+
+    #view-landing [data-reveal="fade"] {
+      transition-duration: 1.0s;
+    }
+
+    #view-landing .lp-hero h1 {
+      animation: lp-hero-fade 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s both;
+    }
+
+    #view-landing .lp-hero .lp-lead {
+      animation: lp-hero-fade 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.25s both;
+    }
+
+    #view-landing .lp-hero .lp-cta {
+      animation: lp-hero-fade 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.4s both;
+    }
+
+    #view-landing .lp-hero .lp-micro {
+      animation: lp-hero-fade 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.55s both;
+    }
+
+    #view-landing .lp-player {
+      animation: lp-hero-fade 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.7s both;
+      transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease;
+    }
+
+    #view-landing .lp-player:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 90px 120px -70px rgba(23, 19, 14, .9);
+    }
+
+    @keyframes lp-hero-fade {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
     #view-landing {
       --lp-paper: #F7F3EC;
       --lp-paper-2: #EFE9DE;
@@ -544,11 +1371,27 @@
       border-radius: 999px;
       border: 1px solid transparent;
       cursor: pointer;
-      transition: transform .18s ease, background .18s ease;
+      transition: transform .25s cubic-bezier(0.25, 0.46, 0.45, 0.94), background .25s ease, box-shadow .25s ease, border-color .25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #view-landing .lp-btn::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(120% 120% at 50% 0%, rgba(255, 255, 255, 0.14), transparent 60%);
+      pointer-events: none;
+    }
+
+    #view-landing .lp-btn > * {
+      position: relative;
+      z-index: 1;
     }
 
     #view-landing .lp-btn:hover {
-      transform: translateY(-2px);
+      transform: translateY(-3px);
+      box-shadow: 0 24px 50px -26px rgba(217, 72, 31, 0.95);
     }
 
     #view-landing .lp-btn-primary {
@@ -672,24 +1515,37 @@
     #view-landing .lp-hero {
       position: relative;
       overflow: hidden;
-      padding: 72px 0 0;
+      padding: 92px 0 0;
       text-align: center;
       background: var(--lp-paper);
+    }
+
+    #view-landing .lp-hero::before {
+      content: "";
+      position: absolute;
+      inset: -25% 0 auto 0;
+      height: 65%;
+      background: radial-gradient(60% 60% at 50% 0%, rgba(217, 72, 31, 0.05), transparent 70%);
+      pointer-events: none;
     }
 
     #view-landing .lp-hero-glow {
       position: absolute;
       left: 50%;
-      top: 220px;
+      top: 200px;
       transform: translateX(-50%);
-      width: min(900px, 92vw);
-      height: 460px;
-      background: radial-gradient(ellipse at center, rgba(217, 72, 31, .16), rgba(217, 72, 31, 0) 68%);
-      filter: blur(6px);
+      width: min(980px, 94vw);
+      height: 520px;
+      background: radial-gradient(ellipse at center, rgba(217, 72, 31, .18), rgba(217, 72, 31, 0) 70%);
+      filter: blur(10px);
       pointer-events: none;
       z-index: 0;
+      animation: hero-glow-pulse 6s ease-in-out infinite;
     }
-
+    @keyframes hero-glow-pulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.9; }
+    }
     #view-landing .lp-hero-inner {
       position: relative;
       z-index: 2;
@@ -699,9 +1555,10 @@
     }
 
     #view-landing .lp-hero h1 {
-      font-size: clamp(2.6rem, 7.5vw, 6.5rem);
-      line-height: .98;
-      margin: 26px 0 0;
+      font-size: clamp(2.8rem, 8vw, 7rem);
+      line-height: .96;
+      margin: 28px 0 0;
+      letter-spacing: -.03em;
     }
 
     #view-landing .lp-hero h1 em {
@@ -732,6 +1589,68 @@
       color: var(--lp-muted-2);
     }
 
+    /* Invite banner: shown only when the visitor arrived through someone's
+       ?ref=<handle> link and has not signed up yet. Its own .hidden rule is
+       needed because the #id rule below would otherwise out-specify Tailwind's
+       utility and keep it visible. */
+    #view-landing .lp-invite {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px 14px;
+      max-width: 660px;
+      margin: 0 auto 26px;
+      padding: 10px 16px;
+      background: rgba(217, 72, 31, .07);
+      border: 1px solid rgba(217, 72, 31, .22);
+      border-radius: 999px;
+      font-size: 13.5px;
+      line-height: 1.4;
+    }
+
+    #view-landing .lp-invite.hidden {
+      display: none;
+    }
+
+    #view-landing .lp-invite-tag {
+      font-family: var(--lp-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--lp-accent);
+      border: 1px solid rgba(217, 72, 31, .3);
+      border-radius: 999px;
+      padding: 3px 10px;
+    }
+
+    #view-landing .lp-invite-text {
+      color: var(--lp-muted);
+    }
+
+    #view-landing .lp-invite-text b {
+      color: var(--lp-ink);
+      font-weight: 600;
+    }
+
+    #view-landing .lp-invite-cta {
+      font: inherit;
+      font-weight: 500;
+      color: var(--lp-accent);
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #view-landing .lp-invite-cta:hover {
+      text-decoration: underline;
+    }
+
     #view-landing .lp-player {
       position: relative;
       z-index: 3;
@@ -742,15 +1661,21 @@
          every size. */
       width: calc(100% - 48px);
       margin: 60px auto 0;
-      background: #FFFDF9;
+      background: linear-gradient(180deg, #FFFEFB 0%, #FFFDF9 100%);
       border: 1px solid var(--lp-line);
       border-radius: 20px;
       box-shadow: 0 40px 70px -50px rgba(23, 19, 14, .55);
-      padding: 22px 24px 20px;
+      padding: 26px 28px 24px;
       display: flex;
       align-items: center;
-      gap: 22px;
+      gap: 24px;
       text-align: left;
+      transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), box-shadow 0.4s ease;
+    }
+
+    #view-landing .lp-player:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 60px 90px -50px rgba(23, 19, 14, .75);
     }
 
     #view-landing .lp-player-top {
@@ -1051,11 +1976,29 @@
       gap: 40px;
     }
 
-    #view-landing .lp-how .lp-head h2 {
-      font-size: clamp(2.2rem, 5.5vw, 4rem);
-      line-height: 1.02;
-      margin-top: 24px;
-    }
+      #view-landing .lp-how .lp-head h2 {
+        font-size: clamp(2.2rem, 5.5vw, 4rem);
+        line-height: 1.02;
+        margin-top: 24px;
+      }
+
+      #view-landing .lp-how {
+        position: relative;
+        overflow: hidden;
+      }
+
+      #view-landing .lp-how::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(60% 60% at 50% 0%, rgba(217, 72, 31, 0.03), transparent 70%);
+        pointer-events: none;
+      }
+
+      #view-landing .lp-how .lp-wrap {
+        position: relative;
+        z-index: 1;
+      }
 
     #view-landing .lp-how .lp-head h2 em {
       font-style: italic;
@@ -1073,14 +2016,21 @@
       grid-template-columns: repeat(3, 1fr);
       margin-top: 60px;
       border-top: 1px solid var(--lp-line);
+      gap: 0;
     }
 
     #view-landing .lp-step {
-      padding: 34px 40px 34px 0;
+      padding: 38px 44px 38px 0;
+      position: relative;
+      transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background 0.4s ease;
+    }
+
+    #view-landing .lp-step:hover {
+      transform: translateY(-4px);
     }
 
     #view-landing .lp-step+.lp-step {
-      padding-left: 40px;
+      padding-left: 44px;
       border-left: 1px solid var(--lp-line);
     }
 
@@ -1108,15 +2058,30 @@
 
     #view-landing .lp-rec {
       margin-top: 72px;
-      background: #FFFDF9;
+      background: linear-gradient(135deg, #FFFEFB 0%, #FFFDF9 100%);
       border: 1px solid var(--lp-line);
       border-radius: 18px;
       box-shadow: 0 40px 70px -58px rgba(23, 19, 14, .7);
-      padding: 24px 28px;
+      padding: 28px 32px;
       display: flex;
       align-items: center;
-      gap: 24px;
+      gap: 28px;
       flex-wrap: wrap;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #view-landing .lp-rec::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(60% 80% at 0% 50%, rgba(217, 72, 31, 0.04), transparent 70%);
+      pointer-events: none;
+    }
+
+    #view-landing .lp-rec > * {
+      position: relative;
+      z-index: 1;
     }
 
     #view-landing .lp-rec .lp-left {
@@ -1130,10 +2095,17 @@
       width: 44px;
       height: 44px;
       border-radius: 50%;
-      background: var(--lp-accent);
+      background: radial-gradient(circle at 30% 30%, #FF7A36, var(--lp-accent));
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 0 0 6px rgba(217, 72, 31, 0.08), 0 12px 30px -18px rgba(217, 72, 31, 0.9);
+      animation: lp-pulse 2.8s ease-in-out infinite;
+    }
+
+    @keyframes lp-pulse {
+      0%, 100% { box-shadow: 0 0 0 6px rgba(217, 72, 31, 0.06), 0 12px 30px -18px rgba(217, 72, 31, 0.8); }
+      50% { box-shadow: 0 0 0 10px rgba(217, 72, 31, 0.08), 0 16px 36px -16px rgba(217, 72, 31, 0.95); }
     }
 
     #view-landing .lp-dot::after {
@@ -1629,7 +2601,13 @@
     }
 
     #view-landing .lp-faq-row {
-      border-top: 1px solid var(--lp-line);
+      border-bottom: 1px solid var(--lp-line);
+      padding: 18px 0;
+      transition: padding-left 0.25s ease, color 0.25s ease;
+    }
+
+    #view-landing .lp-faq-row:hover {
+      padding-left: 6px;
     }
 
     #view-landing .lp-faq-row:last-child {
@@ -2816,6 +3794,389 @@
 
 <body class="bg-surface text-on-surface font-body-md overflow-x-hidden min-h-screen">
 
+  <!-- First-visit intro. Shown once per browser to a signed-out visitor,
+       before the landing page, and dismissed only after the app has rendered
+       the first view (see the inline controller below). Every other body
+       child is kept invisible while this is up, so the landing page never
+       shows through mid-intro. -->
+  <div id="app-splash" role="presentation">
+    <div class="app-splash-voice" id="app-splash-voice" aria-hidden="true">
+      <div class="app-splash-voice-orb"></div>
+      <div class="app-splash-voice-bars">
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+        <div class="app-splash-voice-bar"></div>
+      </div>
+      <div class="app-splash-voice-sub">Your voice. Your proof.</div>
+      <div class="app-splash-voice-brand">Swapiki</div>
+    </div>
+    <div class="app-splash-stage" aria-hidden="true">
+      <canvas class="app-splash-canvas" id="app-splash-canvas"></canvas>
+      <div class="app-splash-glow"></div>
+      <div class="app-splash-grid"></div>
+      <div class="app-splash-vignette"></div>
+        <div class="app-splash-orb">
+          <div class="app-splash-orb-in">
+            <svg class="app-splash-arc" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+              <circle class="app-splash-arc-track" cx="120" cy="120" r="112"/>
+              <circle class="app-splash-arc-draw" cx="120" cy="120" r="112" transform="rotate(-90 120 120)"/>
+            </svg>
+            <svg class="app-splash-arc app-splash-arc--inner" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+              <circle class="app-splash-arc-draw" cx="120" cy="120" r="96" transform="rotate(-90 120 120)"/>
+            </svg>
+            <svg class="app-splash-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <rect x="40" y="17.5" width="20" height="35" rx="10" fill="#F7F3EC"/>
+              <path d="M 26 47.5 A 24 24 0 0 0 74 47.5 L 67.5 47.5 A 17.5 17.5 0 0 1 32.5 47.5 Z" fill="#F7F3EC"/>
+              <rect x="47" y="63" width="6" height="16.5" fill="#F7F3EC"/>
+              <rect x="34" y="79" width="32" height="6.5" rx="3.25" fill="#F7F3EC"/>
+            </svg>
+            <span class="app-splash-beam"></span>
+            <span class="app-splash-pulse"></span>
+            <span class="app-splash-pulse app-splash-pulse--late"></span>
+          </div>
+        </div>
+        <div class="app-splash-word" id="app-splash-word" aria-hidden="true"></div>
+        <div class="app-splash-rule"></div>
+        <div class="app-splash-taglines" id="app-splash-taglines" aria-hidden="true">
+          <span class="app-splash-tagline is-on">Proof first &middot; Human reviewed</span>
+          <span class="app-splash-tagline">Real work, in your own voice</span>
+          <span class="app-splash-tagline">A profile that speaks for you</span>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="app-splash-skip" id="app-splash-skip" aria-label="Skip the intro">Skip intro</button>
+    <div class="app-splash-progress" aria-hidden="true"><div class="app-splash-progress-bar"></div></div>
+    <div class="app-splash-burst" aria-hidden="true"></div>
+  </div>
+
+  <!-- Intro controller. Inline and synchronous on purpose: it has to decide
+       "first visit or not" (and start hiding the page) before the browser
+       paints, otherwise returning visitors would see a frame of the intro.
+
+       Rules:
+         - shows once per browser, and only to a signed-out visitor;
+         - ?splash=1 or ?intro=1 replays it regardless (for review);
+         - the timeline pauses while the tab is in the background;
+         - Skip jumps straight out;
+         - nothing here can trap a visitor: a safety net always releases.
+
+       The app still calls __swapikiSplash.markReady() once the first view is
+       rendered; the stage waits for both that and the timeline to finish. -->
+  <script>
+    (function () {
+      var splash = document.getElementById('app-splash');
+      if (!splash) return;
+
+      var api = {
+        active: true,
+        ready: false,
+        waiters: [],
+        onReady: function (fn) {
+          if (this.ready) { try { fn(); } catch (e) { } }
+          else { this.waiters.push(fn); }
+        },
+        markReady: function () {
+          if (this.ready) return;
+          this.ready = true;
+          var w = this.waiters;
+          this.waiters = [];
+          for (var i = 0; i < w.length; i++) { try { w[i](); } catch (e) { } }
+        }
+      };
+      window.__swapikiSplash = api;
+
+      var host = window.location.hostname;
+      // Public profile subdomains (handle.swapiki.com) open straight onto a
+      // candidate profile, not the landing page, so the intro has no business
+      // there.
+      var isCandidateSubdomain = host && host.endsWith('.swapiki.com') &&
+        host !== 'www.swapiki.com' && host !== 'swapiki.com';
+
+      // A Supabase session is persisted as sb-<ref>-auth-token. If one is
+      // present the visitor is signed in; a returning member should never be
+      // made to sit through the intro.
+      function hasSession() {
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf('-auth-token') !== -1) return true;
+          }
+        } catch (e) { }
+        return false;
+      }
+
+      var KEY = 'swapiki:intro:v1';
+      var force = /[?&](splash|intro)=1\b/.test(window.location.search);
+      var seen = false;
+      try { seen = !!localStorage.getItem(KEY); } catch (e) { seen = false; }
+
+      var shouldShow = !isCandidateSubdomain && (force || true);
+
+      if (!shouldShow) {
+        document.body.classList.remove('splash-active');
+        splash.classList.add('hidden');
+        setTimeout(function () {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 60);
+        api.active = false;
+        api.markReady();
+        return;
+      }
+
+      try { localStorage.setItem(KEY, '1'); } catch (e) { /* private mode */ }
+
+      // How long the stage holds before handing over to the page. One number
+      // to tune. Move it to 60000 for a full minute.
+      var INTRO_MS = 2200;
+      var DURATION = INTRO_MS / 1000;
+      var reduced = false;
+      try {
+        reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch (e) { }
+      if (reduced) { INTRO_MS = 5000; DURATION = 5; }
+      splash.style.setProperty('--intro-ms', INTRO_MS + 'ms');
+
+      // Hide the page before its first paint.
+      document.body.classList.add('splash-active');
+
+      // ---- clock ---------------------------------------------------------
+      // Timestamp-based, so pausing the tab genuinely pauses the intro. The
+      // canvas reads the same clock, which is why motion-freeze works there
+      // too without a second state machine.
+      var startedAt = Date.now();
+      var pausedAt = 0;
+      var pausedTotal = 0;
+      function elapsed() {
+        return (pausedAt || Date.now()) - startedAt - pausedTotal;
+      }
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          if (!pausedAt) pausedAt = Date.now();
+          splash.classList.add('is-paused');
+        } else if (pausedAt) {
+          pausedTotal += Date.now() - pausedAt;
+          pausedAt = 0;
+          splash.classList.remove('is-paused');
+        }
+      });
+
+      // ---- wordmark ------------------------------------------------------
+      // Letters are only inserted once Fraunces is ready (capped at 900ms),
+      // so the word never reflows from Georgia to Fraunces mid-rise - the
+      // single most common reason an intro like this reads as stuttery.
+      var voice = document.getElementById('app-splash-voice');
+      if (voice) {
+        setTimeout(function(){ voice.classList.add('is-active'); }, 40);
+        setTimeout(function(){ voice.classList.add('is-leaving'); }, 1800);
+      }
+
+      // ---- taglines ------------------------------------------------------
+      var lines = splash.querySelectorAll('.app-splash-tagline');
+      if (lines.length > 1 && INTRO_MS > 7000) {
+        var hold = Math.max(2000, Math.floor((INTRO_MS - 4200) / lines.length));
+        var idx = 0;
+        setInterval(function () {
+          var prev = lines[idx];
+          idx = (idx + 1) % lines.length;
+          prev.classList.remove('is-on');
+          prev.classList.add('is-out');
+          lines[idx].classList.remove('is-out');
+          lines[idx].classList.add('is-on');
+          setTimeout(function () { prev.classList.remove('is-out'); }, 900);
+        }, hold);
+      }
+
+      // ---- particle stage ------------------------------------------------
+      // Motes converge from a wide field into the arc ring, orbit it, and
+      // open back out before the cut. Positions are stored in ring-radius
+      // units, so a resize only needs a re-measure, never a rebuild.
+      var canvas = null;
+      var ctx = null;
+      var cw = 0, ch = 0, dpr = 1, cx = 0, cy = 0, baseR = 0;
+      var motes = [];
+      var rafId = 0;
+
+      function clamp01(v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
+      function easeOutCubic(v) { var f = 1 - v; return 1 - f * f * f; }
+
+      function setupCanvas() {
+        canvas = document.getElementById('app-splash-canvas');
+        if (!canvas || !canvas.getContext) return false;
+        if (typeof Path2D === 'undefined') return false;
+        try { ctx = canvas.getContext('2d'); } catch (e) { ctx = null; }
+        return !!ctx;
+      }
+
+      function measure() {
+        if (!ctx) return;
+        var orb = splash.querySelector('.app-splash-orb');
+        if (!orb) return;
+        var r = orb.getBoundingClientRect();
+        cx = r.left + r.width / 2;
+        cy = r.top + r.height / 2;
+        baseR = r.width * 0.467;
+      }
+
+      function sizeCanvas() {
+        if (!ctx) return;
+        cw = splash.clientWidth || window.innerWidth;
+        ch = splash.clientHeight || window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.max(1, Math.round(cw * dpr));
+        canvas.height = Math.max(1, Math.round(ch * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function buildMotes() {
+        var count = Math.max(300, Math.min(900, Math.round((cw * ch) / 1750)));
+        motes = [];
+        var i;
+        for (i = 0; i < count; i++) {
+          motes.push({
+            a: Math.random() * Math.PI * 2,
+            r0: 1.55 + Math.random() * 2.5,
+            r1: 0.92 + Math.random() * 0.18,
+            spin: (0.04 + Math.random() * 0.15) * (Math.random() < 0.5 ? -1 : 1),
+            wob: 0.004 + Math.random() * 0.028,
+            phase: Math.random() * Math.PI * 2,
+            size: 0.45 + Math.random() * 1.35,
+            warm: Math.random() < 0.4,
+            lag: Math.random() * 0.55
+          });
+        }
+        // A handful of brighter sparks pinned to the ring itself.
+        for (i = 0; i < 44; i++) {
+          motes.push({
+            a: (i / 44) * Math.PI * 2,
+            r0: 1.08 + Math.random() * 0.5,
+            r1: 1,
+            spin: 0.085,
+            wob: 0,
+            phase: 0,
+            size: 1 + Math.random() * 1.5,
+            warm: i % 3 === 0,
+            lag: 0
+          });
+        }
+      }
+
+      function draw(t) {
+        if (!ctx || !baseR) return;
+
+        var remain = DURATION - t;
+        var open = remain < 2.0 ? 1 - clamp01(remain / 2.0) : 0;
+        var alpha = clamp01(t / 0.7) * (1 - open * 0.88);
+        var pulse = 1 + Math.sin(t * 0.85) * 0.008;
+        var spread = baseR * open * open * 1.9;
+
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.globalCompositeOperation = 'lighter';
+
+        var cool = new Path2D();
+        var warm = new Path2D();
+
+        for (var i = 0; i < motes.length; i++) {
+          var m = motes[i];
+          var c = easeOutCubic(clamp01((t - 0.12 - m.lag) / 2.15));
+          var rad = baseR * (m.r1 + (m.r0 - m.r1) * (1 - c)) * pulse + spread * m.r0;
+          var ang = m.a + t * m.spin * (0.55 + 0.45 * c);
+          var wob = Math.sin(t * 0.75 + m.phase) * m.wob * baseR * c;
+          var x = cx + Math.cos(ang) * (rad + wob);
+          var y = cy + Math.sin(ang) * (rad + wob) * 0.94;
+          var s = m.size * (0.55 + 0.65 * c);
+          var p = m.warm ? warm : cool;
+          p.moveTo(x + s, y);
+          p.arc(x, y, s, 0, 6.2832);
+        }
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(247, 243, 236, .62)';
+        ctx.fill(cool);
+        ctx.fillStyle = 'rgba(240, 120, 79, .95)';
+        ctx.fill(warm);
+
+        // A soft core under the ring so the motes read as lit, not drawn.
+        var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * 1.9);
+        g.addColorStop(0, 'rgba(217, 72, 31,' + (0.13 * alpha).toFixed(3) + ')');
+        g.addColorStop(0.55, 'rgba(217, 72, 31,' + (0.035 * alpha).toFixed(3) + ')');
+        g.addColorStop(1, 'rgba(217, 72, 31, 0)');
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - baseR * 1.9, cy - baseR * 1.9, baseR * 3.8, baseR * 3.8);
+
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+      }
+
+      function tick() {
+        rafId = 0;
+        if (!ctx) return;
+        var t = elapsed() / 1000;
+        if (t > DURATION + 1.5) return;
+        draw(t);
+        rafId = requestAnimationFrame(tick);
+      }
+
+      if (setupCanvas()) {
+        sizeCanvas();
+        measure();
+        buildMotes();
+        if (reduced) {
+          draw(2.5);
+        } else {
+          rafId = requestAnimationFrame(tick);
+        }
+        window.addEventListener('resize', function () {
+          if (!ctx) return;
+          sizeCanvas();
+          measure();
+          if (reduced) draw(2.5);
+        }, { passive: true });
+      }
+
+      // ---- exit ----------------------------------------------------------
+      function teardown() {
+        if (!splash.parentNode) return;
+        if (rafId) { cancelAnimationFrame(rafId); rafId = 0; }
+        document.body.classList.remove('splash-active');
+        document.body.classList.add('splash-reveal');
+        splash.classList.add('is-cutting');
+        splash.classList.add('hidden');
+        setTimeout(function () {
+          document.body.classList.remove('splash-reveal');
+        }, 900);
+        setTimeout(function () {
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+        }, 1150);
+      }
+
+      var dismissed = false;
+      function dismiss(now) {
+        if (dismissed) return;
+        dismissed = true;
+        var wait = now ? 0 : Math.max(0, INTRO_MS - elapsed());
+        setTimeout(function () {
+          api.active = false;
+          teardown();
+        }, wait);
+      }
+
+      var skip = document.getElementById('app-splash-skip');
+      if (skip) skip.addEventListener('click', function () { dismiss(true); });
+
+      api.onReady(dismiss);
+      // Safety net: a broken boot can never trap a visitor behind the stage.
+      setTimeout(function () { dismiss(true); }, INTRO_MS + 2800);
+    })();
+  </script>
+
   <!-- Instant loading indicator — pure HTML/CSS, needs no JS to appear.
        Every .view-section below starts as display:none and only becomes
        visible after app.init() finishes checking the Supabase session, so
@@ -2835,7 +4196,29 @@
     }
   </style>
 
-  <!-- ================= TOP ANNOUNCEMENT BANNER ================= -->
+  <script>
+    (function(){
+      if (typeof window === 'undefined') return;
+      var root = document.getElementById('view-landing');
+      if (!root) return;
+      var items = root.querySelectorAll('[data-reveal]');
+      if (!items.length) return;
+      var obs = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-inview');
+            obs.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.08, rootMargin: '0px 0px -60px 0px' });
+      items.forEach(function(el, idx){
+        if (el.classList.contains('lp-step') || el.classList.contains('lp-stat') || el.classList.contains('lp-card')) {
+          el.style.setProperty('--reveal-delay', idx % 4);
+        }
+        obs.observe(el);
+      });
+    })();
+  </script>
   <div id="site-topbar"
     class="fixed top-0 left-0 w-full z-50 bg-[#17130E] border-b border-white/10 text-[#F7F3EC] text-[11px] sm:text-xs font-bold py-1.5 sm:py-2 px-3 sm:px-4 text-center shadow-md flex items-center justify-center gap-1.5 sm:gap-2">
     <span
@@ -2869,21 +4252,13 @@
           <span class="w-2 h-2 rounded-full bg-[#D9481F] animate-pulse"></span>
           <span>Pilot Phase Is Live</span>
         </div>
-        <div class="hidden md:flex items-center gap-6 ml-2">
-          <button type="button" onclick="event.stopPropagation(); router.navigate('dashboard')"
-            class="text-sm font-medium text-[#6B6156] hover:text-[#D9481F] transition-colors cursor-pointer">Dashboard</button>
-          <button type="button" onclick="event.stopPropagation(); router.navigate('candidate')"
-            class="text-sm font-medium text-[#6B6156] hover:text-[#D9481F] transition-colors cursor-pointer">Candidate
-            Profile View</button>
-          <a href="/jobs"
-            class="text-sm font-medium text-[#6B6156] hover:text-[#D9481F] transition-colors">Jobs</a>
-        </div>
+
       </div>
       <div class="flex items-center gap-4">
-        <button onclick="app.openEditProfileModal()"
+        <button data-tour="nav-edit-profile" onclick="app.openEditProfileModal()"
           class="auth-user-only hidden sm:block text-sm font-medium px-4 py-2 text-[#6B6156] hover:text-[#D9481F] transition-colors">Edit
           Profile</button>
-        <button onclick="app.openOnboardingGuide()" title="How Swapiki Works"
+        <button data-tour="nav-help" onclick="app.openOnboardingGuide()" title="How Swapiki Works"
           class="auth-user-only hidden sm:flex items-center justify-center p-2 rounded-lg text-[#6B6156] hover:text-[#D9481F] hover:bg-[#EFE9DE] transition-colors">
           <span class="material-symbols-outlined text-xl">help</span>
         </button>
@@ -2938,18 +4313,7 @@
 
     <!-- Mobile Dropdown Navigation Menu -->
     <div id="mobile-nav-menu" class="hidden md:hidden bg-[#F7F3EC] border-b border-[#E1D9CB] px-6 py-4 space-y-3 shadow-lg">
-      <button type="button" onclick="app.closeMobileMenu(); router.navigate('dashboard')"
-        class="block w-full text-left font-bold text-sm text-[#17130E] py-2 border-b border-[#E1D9CB] flex items-center gap-2">
-        <span class="material-symbols-outlined text-[#D9481F] text-lg">dashboard</span> Candidate Dashboard
-      </button>
-      <button type="button" onclick="app.closeMobileMenu(); router.navigate('candidate')"
-        class="block w-full text-left font-bold text-sm text-[#17130E] py-2 border-b border-[#E1D9CB] flex items-center gap-2">
-        <span class="material-symbols-outlined text-[#D9481F] text-lg">badge</span> Candidate Profile View
-      </button>
-      <button type="button" onclick="app.closeMobileMenu(); router.navigate('jobs')"
-        class="block w-full text-left font-bold text-sm text-[#17130E] py-2 border-b border-[#E1D9CB] flex items-center gap-2">
-        <span class="material-symbols-outlined text-[#D9481F] text-lg">work</span> Jobs
-      </button>
+
       <!-- Mobile Candidate Account Action -->
       <div class="auth-guest-only pt-2 border-t border-[#E1D9CB] space-y-2">
         <button type="button" onclick="app.closeMobileMenu(); app.openLoginModal()"
@@ -2990,21 +4354,22 @@
         <section class="lp-hero">
           <div class="lp-hero-glow"></div>
           <div class="lp-hero-inner">
-            <span class="lp-eyebrow">Pilot live &mdash; 100% free</span>
-            <h1>Skip the bot.<br /><em>Get heard.</em></h1>
-            <p class="lp-lead">Swapiki sends hiring managers your project proof and a two-minute voice walkthrough
+            <div id="invite-banner" class="lp-invite hidden" role="status" aria-live="polite"></div>
+            <span class="lp-eyebrow" data-reveal="fade">Pilot live &mdash; 100% free</span>
+            <h1 data-reveal>Skip the bot.<br /><em>Get heard.</em></h1>
+            <p class="lp-lead" data-reveal>Swapiki sends hiring managers your project proof and a two-minute voice walkthrough
               &mdash; read and heard by people, never screened by AI keywords.</p>
-            <div class="lp-cta">
+            <div class="lp-cta" data-reveal>
               <button type="button" class="lp-btn lp-btn-primary" onclick="router.navigate('dashboard')">Start my
                 profile &mdash; free <span aria-hidden="true">&rarr;</span></button>
               <button type="button" class="lp-btn lp-btn-ghost" onclick="router.navigate('candidate')">See a live
                 profile</button>
             </div>
-            <div class="lp-micro">No credit card &nbsp;&middot;&nbsp; Publish in 10 minutes &nbsp;&middot;&nbsp; 500+
+            <div class="lp-micro" data-reveal>Carbon-neutral hiring &nbsp;&middot;&nbsp; Publish in 10 minutes &nbsp;&middot;&nbsp; 500+
               job listings</div>
           </div>
 
-          <div class="lp-player">
+          <div class="lp-player" data-reveal>
             <div class="lp-player-top">
               <div class="lp-pname">Voice walkthrough &middot; Razorpay UPI project</div>
               <div class="lp-ptrust">
@@ -3031,15 +4396,15 @@
              qualification. Every clause here is something the product does. -->
         <section class="lp-what" id="what-is-swapiki">
           <div class="lp-wrap">
-            <span class="lp-eyebrow">In one paragraph</span>
-            <h2 class="lp-what-q">What is Swapiki?</h2>
-            <p class="lp-what-answer">Swapiki is a free, India-focused hiring platform where candidates publish
+            <span class="lp-eyebrow" data-reveal="fade">In one paragraph</span>
+            <h2 class="lp-what-q" data-reveal>What is Swapiki?</h2>
+            <p class="lp-what-answer" data-reveal>Swapiki is a free, India-focused hiring platform where candidates publish
               proof of real projects alongside a two-minute recorded voice walkthrough, and hiring managers review
               that proof directly instead of screening a resume. Swapiki does not use AI to score, rank or reject
               anyone, and it does not verify identity &mdash; nothing is stamped as verified. It also runs a public
               board of IT, BFSI and other openings across India: the listings are readable by anyone, and the
               search, filters and match scoring open up once your profile is 80% complete.</p>
-            <ul class="lp-what-facts">
+            <ul class="lp-what-facts" data-reveal>
               <li>Free during the pilot &mdash; no card step</li>
               <li>No AI scoring, ranking or auto-rejection</li>
               <li>Liveness check only &mdash; no identity check</li>
@@ -3051,10 +4416,10 @@
         <!-- ================= 02 - THE PROBLEM ================= -->
         <section class="lp-problem">
           <div class="lp-wrap">
-            <span class="lp-eyebrow">Why hiring feels broken</span>
+            <span class="lp-eyebrow" data-reveal="fade">Why hiring feels broken</span>
             <div class="lp-top">
-              <div class="lp-bignum word">Everyone<br />looks <span>the<br />same</span></div>
-              <div class="lp-say">
+              <div class="lp-bignum word" data-reveal>Everyone<br />looks <span>the<br />same</span></div>
+              <div class="lp-say" data-reveal>
                 <p>Polished applications are cheap to produce now. A bigger pile did not make any single one of them
                   more <b>true</b>.
                 </p>
@@ -3062,17 +4427,17 @@
               </div>
             </div>
             <div class="lp-stats">
-              <div class="lp-stat">
+              <div class="lp-stat" data-reveal>
                 <div class="n">Volume</div>
                 <div class="l">Templates and writing tools let anyone ship a clean, well-formatted application in
                   minutes. Recruiters receive more of them than ever.</div>
               </div>
-              <div class="lp-stat">
+              <div class="lp-stat" data-reveal>
                 <div class="n">Matching</div>
                 <div class="l">Filters rank on exact phrases rather than on what you can actually build, so near-misses
                   get dropped before a person reads them.</div>
               </div>
-              <div class="lp-stat">
+              <div class="lp-stat" data-reveal>
                 <div class="n">Skimming</div>
                 <div class="l">A long stack gets seconds of attention. The most interesting project in the file is
                   usually the one that never gets opened.</div>
@@ -3090,27 +4455,27 @@
           <div class="lp-wrap">
             <div class="lp-head">
               <div>
-                <span class="lp-eyebrow">How it works</span>
-                <h2>Two minutes.<br /><em>Three steps.</em></h2>
+                <span class="lp-eyebrow" data-reveal="fade">How it works</span>
+                <h2 data-reveal>Two minutes.<br /><em>Three steps.</em></h2>
               </div>
-              <p class="lp-lead">No forms to war with, no keyword games, no black-box ranking. Just proof, your voice,
+              <p class="lp-lead" data-reveal>No forms to war with, no keyword games, no black-box ranking. Just proof, your voice,
                 and one link.</p>
             </div>
 
             <div class="lp-steps">
-              <div class="lp-step">
+              <div class="lp-step" data-reveal="scale">
                 <div class="num">01</div>
                 <h3>Document 1&ndash;2 proof projects</h3>
                 <p>The problem, your exact ownership, and one metric that actually moved. Four slots, no essay
                   required.</p>
               </div>
-              <div class="lp-step">
+              <div class="lp-step" data-reveal="scale">
                 <div class="num">02</div>
                 <h3>Record a 2-minute walkthrough</h3>
                 <p>Talk through your logic in your own words. Read the on-screen phrase to confirm it's a live
                   recording.</p>
               </div>
-              <div class="lp-step">
+              <div class="lp-step" data-reveal="scale">
                 <div class="num">03</div>
                 <h3>Share your link</h3>
                 <p>Send <b>your-handle.swapiki.com</b> straight to a hiring manager. A person opens it &mdash; not a
@@ -3124,7 +4489,7 @@
             <div class="lp-ticks-label">Seven things unlock a complete profile &mdash; the same seven the dashboard
               counts</div>
 
-            <div class="lp-rec">
+            <div class="lp-rec" data-reveal="scale">
               <div class="lp-left">
                 <div class="lp-dot"></div>
                 <div>
@@ -3220,14 +4585,37 @@
               </div>
               <div class="lp-live-cell">
                 <div class="lp-live-n" id="lp-live-jobs">&mdash;</div>
-                <div class="lp-live-l">Open roles</div>
+                <div class="lp-live-l"><a href="/jobs" style="color:inherit;text-decoration:none;">Open roles</a></div>
               </div>
             </div>
             <p class="lp-live-note">Live counts of what is actually on the platform right now. Nothing here is estimated.</p>
           </div>
         </section>
 
-        <!-- ================= 05 - PILOT FEEDBACK (real, verbatim) ================= -->
+        <section class="lp-city-hubs">
+          <div class="lp-wrap">
+            <div class="lp-city-hubs-head">
+              <div>
+                <span class="lp-eyebrow">Browse by city</span>
+                <h2>Jobs in <em>India's top hubs.</em></h2>
+              </div>
+              <p class="lp-lead">Find jobs by location. Every hub is built from live listings.</p>
+            </div>
+            <div class="lp-city-hubs-grid">
+              <a class="lp-city-hub" href="/jobs/in/bangalore"><span>Bangalore</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/hyderabad"><span>Hyderabad</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/pune"><span>Pune</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/mumbai"><span>Mumbai</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/delhi-ncr"><span>Delhi NCR</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/chennai"><span>Chennai</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/kochi"><span>Kochi</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/remote"><span>Remote</span><span class="lp-city-hub-arrow">→</span></a>
+            </div>
+            <div class="lp-city-hubs-more">
+              <a href="/jobs">Browse all jobs in India →</a>
+            </div>
+          </div>
+        </section>
         <section class="lp-fb">
           <div class="lp-wrap">
             <div class="lp-fb-head">
@@ -3473,6 +4861,7 @@
       <main class="pt-8 pb-section-gap px-margin-mobile md:px-gutter max-w-container-max mx-auto">
         <section class="mb-section-gap">
           <div
+            data-tour="dash-status"
             class="relative overflow-hidden bg-gradient-to-br from-primary via-primary-container to-slate-900 border-2 border-primary-fixed/40 p-8 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-[0.06] rounded-full -mr-24 -mt-24"></div>
             <div class="relative z-10">
@@ -3488,17 +4877,17 @@
                 published and visible to hiring managers across India.</p>
             </div>
             <div class="relative z-10 flex flex-wrap items-center gap-3">
-              <button onclick="router.navigate('add-project')"
+              <button data-tour="add-project" onclick="router.navigate('add-project')"
                 class="px-5 py-2.5 bg-white text-primary rounded-lg font-label-md font-bold shadow-md hover:bg-slate-100 transition-colors flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-lg">add_circle</span> Add Proof Project
               </button>
-              <button onclick="app.openShareModal()"
+              <button data-tour="dash-share" onclick="app.openShareModal()"
                 class="px-5 py-2.5 bg-white/10 text-white border border-white/20 rounded-lg font-label-md font-bold hover:bg-white/20 transition-colors">Share
                 Candidate Link</button>
               <button onclick="router.navigate('candidate')"
                 class="px-5 py-2.5 bg-white text-primary rounded-lg font-label-md font-bold hover:bg-slate-100 transition-colors">Preview
                 Public View</button>
-              <button id="btn-publish-profile" onclick="app.publishProfile()"
+              <button data-tour="dash-publish" id="btn-publish-profile" onclick="app.publishProfile()"
                 class="px-3 py-2 text-emerald-300 hover:text-emerald-100 text-xs font-medium hover:underline transition-colors">Unpublish
                 Profile</button>
             </div>
@@ -3521,7 +4910,7 @@
              with specific next actions. Percent comes from real profile data
              (js/profileChecklist.js); each item jumps to where it's done.
              More complete profiles = more to show anyone who opens the link. -->
-        <section class="mb-section-gap">
+        <section data-tour="dash-checklist" class="mb-section-gap">
           <div class="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
               <div>
@@ -3572,7 +4961,7 @@
               </div>
 
               <!-- Metric Row 3: Voice walkthroughs (liveness check, not a review) -->
-              <div class="metric-row">
+              <div class="metric-row" data-tour="dash-voice">
                 <div class="flex justify-between items-center text-xs mb-1">
                   <span class="text-slate-500 font-bold uppercase tracking-wider">Voice Walkthroughs</span>
                   <span id="dash-audio-verified-label" class="font-bold text-amber-600">0% with audio</span>
@@ -3587,6 +4976,7 @@
           </div>
 
           <div
+            data-tour="dash-public"
             class="lg:col-span-5 bg-gradient-to-br from-primary via-primary-container to-slate-900 text-white p-8 rounded-2xl shadow-md flex flex-col justify-between">
             <div>
               <h3 class="font-headline-sm text-headline-sm font-bold mb-4">Public Proof Profile</h3>
@@ -3778,17 +5168,17 @@
 
         <!-- ============= PROFILE HERO ============= -->
         <section class="mb-8">
-          <div class="bg-white border border-slate-200 rounded-b-2xl md:rounded-tr-2xl shadow-sm overflow-hidden">
-            <div class="h-1.5 bg-gradient-to-r from-primary via-secondary to-primary-container"></div>
+          <div class="bg-white border border-slate-200 rounded-b-2xl md:rounded-tr-2xl shadow-sm">
+            <div class="h-1.5 md:rounded-tr-2xl bg-gradient-to-r from-primary via-secondary to-primary-container"></div>
             <div class="p-6 md:p-8">
               <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-6 lg:gap-8">
 
                 <div class="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 text-center sm:text-left">
                   <!-- Avatar. Deliberately no always-on "verified" check:
                        Swapiki does not verify identity, and a green tick on
-                       every profile implied that it did. The real, conditional
-                       badges (Live recording confirmed / Reviewed by Swapiki
-                       team) render to the right, only when actually earned. -->
+                       every profile implied that it did. The one real,
+                       conditional badge (Live recording confirmed) renders to
+                       the right, only when actually earned. -->
                   <div class="relative shrink-0">
                     <img id="rec-avatar-img"
                       class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border border-outline-variant shadow-md bg-slate-100"
@@ -3798,20 +5188,40 @@
                   </div>
 
                   <div class="min-w-0">
-                    <span
-                      class="inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-primary bg-primary-fixed px-2.5 py-1 rounded-full mb-2.5">
+                    <span tabindex="0"
+                      class="group relative inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-primary bg-primary-fixed px-2.5 py-1 rounded-full mb-2.5 cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
                       <span class="material-symbols-outlined text-[13px]">badge</span> Candidate Profile
+                      <span role="tooltip"
+                        class="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-72 max-w-[78vw] -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3.5 text-left text-[11px] font-medium normal-case leading-relaxed tracking-normal text-slate-600 opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                        <span class="mb-1 block text-[11px] font-bold text-slate-900">Candidate profile</span>
+                        <span class="mb-2 block">The projects on this page are <strong class="font-semibold text-slate-800">candidate-submitted</strong>. Swapiki does not verify identity and does not confirm that a project was the candidate's own work.</span>
+                        <span class="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-primary-text">How to get the blue-tick badge</span>
+                        <span class="block">You&rsquo;ll get the badge when you update your profile, add a project, record a voice walkthrough and publish it. Do all four and your profile earns the blue-tick &ldquo;Verified&rdquo; badge &mdash; automatically.</span>
+                      </span>
                     </span>
-                    <span id="voice-verified-badge"
-                      class="hidden items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full mb-2.5 ml-2"
-                      title="This recording was captured live in one session, reading a random code that could not have been pre-recorded. It is not an identity check.">
+                    <span id="voice-verified-badge" tabindex="0"
+                      class="group relative hidden inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full mb-2.5 ml-2 cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">
                       <span class="material-symbols-outlined text-[13px]">record_voice_over</span> Live recording confirmed
+                      <span role="tooltip"
+                        class="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-72 max-w-[78vw] -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3.5 text-left text-[11px] font-medium normal-case leading-relaxed tracking-normal text-slate-600 opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                        <span class="mb-1 block text-[11px] font-bold text-slate-900">Live recording confirmed</span>
+                        <span class="mb-2 block">The candidate read a random on-screen code into a microphone in one take, so the walkthrough cannot be a replay. It does <strong class="font-semibold text-slate-800">not</strong> prove who was speaking, or that the project is theirs.</span>
+                        <span class="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-emerald-700">How to get it</span>
+                        <span class="block">Record a live walkthrough in your dashboard (Chrome or Edge) and read the three random code words aloud at the end. A confirmed recording earns this badge automatically.</span>
+                      </span>
                     </span>
-                    <span id="staff-review-badge"
-                      class="hidden items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-full mb-2.5 ml-2"
-                      title="A human on the Swapiki team has reviewed this profile. Never awarded by an algorithm — only a person can mark it.">
-                      <span class="material-symbols-outlined text-[13px]">verified_user</span> Reviewed by Swapiki team
+                    <span id="reviewed-badge" tabindex="0"
+                      class="group relative hidden inline-flex items-center gap-1.5 text-[10px] font-extrabold tracking-widest uppercase text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full mb-2.5 ml-2 cursor-help focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/50">
+                      <span class="material-symbols-outlined text-[13px] text-blue-600">verified</span> Verified
+                      <span role="tooltip"
+                        class="pointer-events-none invisible absolute left-1/2 top-full z-50 mt-2 w-72 max-w-[78vw] -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3.5 text-left text-[11px] font-medium normal-case leading-relaxed tracking-normal text-slate-600 opacity-0 shadow-xl transition-opacity duration-150 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                        <span class="mb-1 block text-[11px] font-bold text-slate-900">Verified</span>
+                        <span class="mb-2 block">This profile cleared Swapiki&rsquo;s <strong class="font-semibold text-slate-800">automatic</strong> completeness checks: the details are filled in, there is at least one proof project, the live recording was confirmed, and the profile is published. It is not a human review, and not an identity, credential or background check.</span>
+                        <span class="mb-0.5 block text-[10px] font-bold uppercase tracking-wide text-blue-700">How to get it</span>
+                        <span class="block">Fill in your details (name, title, location and a link), add at least one proof project, record a live walkthrough reading the random code aloud, and publish your profile. Finish all of it and this badge appears automatically.</span>
+                      </span>
                     </span>
+                    <p class="text-[10px] text-slate-400 mb-2 leading-snug font-medium">Badges above are automated completeness checks &mdash; they are not identity or background verification.</p>
                     <h1 id="rec-name-text" class="text-2xl sm:text-headline-lg font-bold text-slate-900 leading-tight">
                       Candidate Profile</h1>
                     <p id="rec-title-text" class="text-sm sm:text-base text-slate-600 font-medium mt-1.5">Product
@@ -3842,11 +5252,15 @@
                   </div>
                 </div>
 
-                <div class="flex sm:justify-center lg:justify-end shrink-0">
+                <div class="flex flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0 w-full sm:w-auto">
                   <button
                     class="cta-hover flex items-center justify-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-container text-white rounded-lg font-bold text-xs shadow-md transition-all w-full sm:w-auto"
                     onclick="app.openShareModal()">
                     <span class="material-symbols-outlined text-[18px]">content_copy</span> Copy Link
+                  </button>
+                  <button id="rec-report-btn" onclick="app.openReportProfileModal()"
+                    class="hidden items-center justify-center gap-1 text-[11px] font-bold text-slate-400 hover:text-rose-600 transition-colors">
+                    <span class="material-symbols-outlined text-[15px]">flag</span> Report this profile
                   </button>
                 </div>
               </div>
@@ -3905,12 +5319,6 @@
                 <span><strong class="text-slate-800">Live recording confirmed</strong> &mdash; the candidate read a random
                   on-screen code into a microphone in one take, so the walkthrough is not a replay. It does
                   <strong>not</strong> prove who was speaking, that the project is theirs, or that any claim is true.</span>
-              </li>
-              <li class="flex gap-2.5">
-                <span class="material-symbols-outlined text-sky-600 text-[16px] shrink-0 mt-0.5">verified_user</span>
-                <span><strong class="text-slate-800">Reviewed by Swapiki team</strong> &mdash; a person on our team opened
-                  this profile. It is never awarded by an algorithm, and it is not an identity, background or credential
-                  check.</span>
               </li>
               <li class="flex gap-2.5">
                 <span class="material-symbols-outlined text-slate-400 text-[16px] shrink-0 mt-0.5">badge</span>
@@ -4226,6 +5634,51 @@
           <span class="font-bold text-sm text-slate-800">Copy Link</span>
         </button>
       </div>
+    </div>
+  </div>
+
+  <div id="modal-share-job"
+    class="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative border border-slate-200">
+      <button onclick="app.closeJobShareModal()"
+        class="absolute top-4 right-4 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-full p-1 transition-colors">
+        <span class="material-symbols-outlined text-2xl">close</span>
+      </button>
+
+      <h2 class="text-lg font-bold text-slate-900">Share this job</h2>
+      <p class="text-xs text-slate-500 mt-1 mb-4">Send this opening to someone who'd be a good fit.</p>
+
+      <div id="share-job-url" class="text-xs text-slate-500 mb-4 break-all font-mono"></div>
+      <div id="share-job-preview" class="mb-4"></div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="app.shareJobVia('whatsapp')"
+          class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-left">
+          <span class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">chat</span></span>
+          <span class="font-bold text-xs text-slate-800">WhatsApp</span>
+        </button>
+        <button onclick="app.shareJobVia('linkedin')"
+          class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-left">
+          <span class="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">work</span></span>
+          <span class="font-bold text-xs text-slate-800">LinkedIn</span>
+        </button>
+        <button onclick="app.shareJobVia('x')"
+          class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-left">
+          <span class="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">alternate_email</span></span>
+          <span class="font-bold text-xs text-slate-800">X / Twitter</span>
+        </button>
+        <button onclick="app.shareJobVia('email')"
+          class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-left">
+          <span class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">mail</span></span>
+          <span class="font-bold text-xs text-slate-800">Email</span>
+        </button>
+      </div>
+
+      <button onclick="app.copyJobLink()"
+        class="mt-2 w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors text-left">
+        <span class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">content_copy</span></span>
+        <span class="font-bold text-xs text-slate-800">Copy link</span>
+      </button>
     </div>
   </div>
 
@@ -4601,6 +6054,45 @@
     </div>
   </div>
 
+  <!-- FIRST-TIME SIGN-IN GUIDED TOUR
+       A spotlight walks a new candidate through the real controls: each step
+       dims the page, rings the element it is talking about and puts a small
+       card beside it. Next moves to the next control; Skip ends the tour. -->
+  <div id="tour-root" class="fixed inset-0 z-[100000] hidden" aria-live="polite">
+    <div id="tour-backdrop" class="absolute inset-0 bg-slate-900/65"></div>
+    <div id="tour-spotlight" class="absolute rounded-xl border-2 border-white pointer-events-none hidden"
+      style="box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.65);"></div>
+    <div id="tour-popover"
+      class="absolute bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 pointer-events-auto"
+      style="width: 360px; max-width: calc(100vw - 24px);">
+      <div class="flex items-start gap-3">
+        <div id="tour-icon-wrap"
+          class="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <span id="tour-icon" class="material-symbols-outlined text-xl">waving_hand</span>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p id="tour-step-count" class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Step 1</p>
+          <h3 id="tour-title" class="text-base font-bold text-slate-900 leading-snug">Welcome to Swapiki</h3>
+        </div>
+        <button type="button" onclick="app.skipGuidedTour()" title="Skip tour"
+          class="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full p-1 -mt-1 -mr-1 transition-colors">
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+      <p id="tour-body" class="text-sm text-slate-600 leading-relaxed mt-3"></p>
+      <div class="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
+        <button type="button" id="tour-skip" onclick="app.skipGuidedTour()"
+          class="px-3 py-2 text-xs font-bold text-slate-500 rounded-lg hover:bg-slate-100">Skip tour</button>
+        <div class="flex items-center gap-2">
+          <button type="button" id="tour-back" onclick="app.prevGuidedTourStep()"
+            class="px-3 py-2 text-xs font-bold text-slate-700 rounded-lg hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed">Back</button>
+          <button type="button" id="tour-next" onclick="app.nextGuidedTourStep()"
+            class="px-5 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 shadow-md">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- HOW SWAPIKI WORKS — shown once after first login, reopenable anytime -->
   <div id="modal-onboarding-guide"
     class="fixed inset-0 z-[99999] bg-slate-900/70 flex items-center justify-center p-4 hidden">
@@ -4716,13 +6208,6 @@
           <div>
             <p class="text-sm font-bold text-slate-900">The recording is confirmed live</p>
             <p class="text-xs text-slate-600 mt-0.5">Every live-recording badge is earned by reading a <strong>random 3-word code</strong> aloud into the microphone — a new code every single session, and the app checks that the code actually appears in the recording. A pre-recorded clip can't satisfy a code that did not exist when it was made. <strong>It proves the audio is not a replay; it is not a claim about who is speaking.</strong></p>
-          </div>
-        </div>
-        <div class="flex gap-3">
-          <div class="w-7 h-7 rounded-full bg-sky-50 text-sky-600 flex items-center justify-center text-xs shrink-0 mt-0.5"><span class="material-symbols-outlined text-sm">verified_user</span></div>
-          <div>
-            <p class="text-sm font-bold text-slate-900">Reviewed by the Swapiki team</p>
-            <p class="text-xs text-slate-600 mt-0.5">The "Reviewed by Swapiki team" badge means a <strong>real person</strong> on the Swapiki team has looked at the profile. It's awarded by hand, never by an algorithm — so it only ever appears when a human has actually reviewed the work.</p>
           </div>
         </div>
         <div class="flex gap-3">
@@ -5100,6 +6585,55 @@
     <span class="text-xs font-bold">Feedback</span>
   </button>
 
+  <div id="modal-report-profile"
+    class="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-slate-200">
+      <button onclick="app.closeReportProfileModal()"
+        class="absolute top-4 right-4 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-full p-1 transition-colors">
+        <span class="material-symbols-outlined text-2xl">close</span>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+          <span class="material-symbols-outlined text-2xl">flag</span>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-slate-900">Report this profile</h3>
+          <p class="text-xs text-slate-500">Reports go straight to the Swapiki team. False reports are ignored.</p>
+        </div>
+      </div>
+
+      <form onsubmit="app.submitProfileReport(event)">
+        <p class="text-xs text-slate-500 mb-3">Reporting: <strong id="report-profile-target" class="text-slate-800"></strong></p>
+
+        <label class="block mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">What is wrong?</label>
+        <select id="report-reason"
+          class="w-full mb-3 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300">
+          <option value="scam">Looks like a scam or fraud</option>
+          <option value="impersonation">Fake person or stolen identity</option>
+          <option value="stolen_work">Stolen work or content</option>
+          <option value="contact">Asks for money or off-platform contact</option>
+          <option value="spam">Spam or advertising</option>
+          <option value="other">Something else</option>
+        </select>
+
+        <label class="block mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">What did you notice?</label>
+        <textarea id="report-details" rows="4" maxlength="1000"
+          placeholder="The more specific, the faster we can check it."
+          class="w-full mb-3 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 resize-none"></textarea>
+
+        <label class="block mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Contact (optional)</label>
+        <input id="report-email" type="email" placeholder="you@example.com &mdash; only if we may follow up"
+          class="w-full mb-5 border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300" />
+
+        <button type="submit"
+          class="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm rounded-lg transition-colors">
+          Send report
+        </button>
+      </form>
+    </div>
+  </div>
+
   <div id="modal-feedback"
     class="fixed inset-0 z-50 bg-slate-900/70 flex items-center justify-center p-4 hidden">
     <div class="bg-white rounded-2xl max-w-md w-full p-6 md:p-8 shadow-2xl relative border border-slate-200">
@@ -5156,12 +6690,12 @@
        document order, right before DOMContentLoaded). -->
 <script src="/dist/js/config.js?v=20261008a" defer></script>
    <script src="/dist/js/googleAuth.js?v=20261001a" defer></script>
-   <script src="/dist/js/store.js?v=20261008a" defer></script>
+   <script src="/dist/js/store.js?v=20261014m" defer></script>
    <script src="/dist/js/audioEngine.js?v=20261001a" defer></script>
-   <script src="/dist/js/profileChecklist.js?v=20261001a" defer></script>
+   <script src="/dist/js/profileChecklist.js?v=20261014m" defer></script>
     <script src="/dist/js/profileMatch.js?v=20261001a" defer></script>
     <script src="/dist/js/githubMatch.js?v=20261001a" defer></script>
-    <script src="/dist/js/app.js?v=20261012b" defer></script>
+    <script src="/dist/js/app.js?v=20261014m" defer></script>
 </body>
 
 </html>

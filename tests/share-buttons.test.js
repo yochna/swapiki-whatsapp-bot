@@ -63,3 +63,50 @@ test('the profile SSR body renders a share row and keeps it script-free', async 
   // stripped or double-execute, and the profile test forbids it anyway.
   assert.ok(!body.includes('<script'), 'the SSR section must not contain a script tag');
 });
+
+test('the SPA job card renders a share button wired to a canonical /jobs/<id> link', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
+  assert.match(src, /openJobShareModal\('\$\{j\.id\}'\)/, 'each job card must render a share button');
+  assert.match(src, /jobShareUrl\(job\)\s*\{[\s\S]*?\/jobs\/\$\{encodeURIComponent\(job\.id\)\}/,
+    'jobShareUrl must build the canonical /jobs/<id> URL');
+  assert.match(src, /shareJobVia\(channel\)/, 'shareJobVia must exist');
+  assert.match(src, /copyJobLink\(\)\s*\{/, 'copyJobLink must exist');
+});
+
+test('the SPA job share modal offers the same destinations as the SSR share row', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(src, /id="modal-share-job"/, 'the SPA must carry a job share modal');
+  for (const channel of ['whatsapp', 'linkedin', 'x', 'email']) {
+    assert.ok(src.includes(`app.shareJobVia('${channel}')`), `modal must offer ${channel}`);
+  }
+  assert.ok(src.includes('app.copyJobLink()'), 'modal must offer copy link');
+});
+
+test('the apply modal offers a share action and shares are tracked', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
+  assert.match(src, /closeJobApplyModal\(\); app\.openJobShareModal\('\$\{job\.id\}'\)/,
+    'the apply modal must offer a share action');
+  assert.match(src, /posthog\.capture\('job_share',/, 'a completed share must be logged to PostHog');
+  assert.match(src, /posthog\.capture\('job_share_open'/, 'opening the share modal must be logged');
+});
+
+test('the server-rendered /jobs board gives every card a share row', () => {
+  // The board is the first thing shown on /jobs (the SPA replaces it on boot),
+  // and the only thing a no-JS crawler or reader sees. A share control that
+  // lives only in the app is missing for everyone in that window.
+  const src = fs.readFileSync(path.join(ROOT, 'functions', 'jobs.js'), 'utf8');
+  assert.match(src, /import\s*\{\s*shareRow\s*\}/, 'the board must import the share row');
+  const card = src.slice(src.indexOf('const jobCard ='), src.indexOf('const renderBoardRows'));
+  assert.match(card, /shareRow\(/, 'each server-rendered card must carry a share row');
+  assert.match(card, /https:\/\/swapiki\.com\$\{href\}/, 'the board must share the job canonical URL');
+});
+
+test('the SPA board paints one page at a time, with a Show more control', () => {
+  // Rendering all several thousand cards into one innerHTML freezes the board on
+  // arrival; the page must bound what it paints and offer the rest on demand.
+  const src = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
+  assert.match(src, /const JOBS_PAGE_SIZE\s*=\s*\d+/, 'the board must define a page size');
+  assert.match(src, /filtered\.slice\(0,\s*limit\)/, 'the board must paint a bounded slice, not every card');
+  assert.match(src, /showMoreJobs\(\)\s*\{[\s\S]*?jobsShown[\s\S]*?\+\s*JOBS_PAGE_SIZE/, 'Show more must advance one page');
+  assert.match(src, /onclick="app\.showMoreJobs\(\)"/, 'the board must offer a Show more button');
+});

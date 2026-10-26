@@ -285,7 +285,6 @@ class SwapikiApp {
     this._adminRenderInFlight = null;
     this._adminRenderQueued = false;
   }
-
   async init() {
     try {
       // Point this deployment at its own backend (test vs prod Supabase) via
@@ -297,6 +296,7 @@ class SwapikiApp {
       // attributed once the visitor actually creates an account.
       if (typeof swapikiStore.captureReferralFromUrl === 'function') {
         swapikiStore.captureReferralFromUrl();
+
       }
 
       // Heavy third-party loaders only matter on production: Google Sign-In
@@ -324,6 +324,7 @@ class SwapikiApp {
       // landing page.
       await swapikiStore.getSession();
       this.refreshAuthUI();
+      try { this.maybeStartGuidedTour(); } catch (e) { /* ignore */ }
 
       // One delegated listener for the jobs-page "personal Telegram link" button:
       // the card is re-rendered whenever the board refetches, so a listener
@@ -353,6 +354,13 @@ class SwapikiApp {
       // landing page, via Router's own fallbacks) is as ready as it'll get —
       // don't leave visitors stuck behind the loader forever.
       document.getElementById('initial-loader')?.remove();
+      // The first-visit splash waits for this signal before it dissolves, so
+      // it only ever reveals a page that has actually rendered.
+      try {
+        if (window.__swapikiSplash && typeof window.__swapikiSplash.markReady === 'function') {
+          window.__swapikiSplash.markReady();
+        }
+      } catch (e) { /* splash is optional */ }
     }
   }
 
@@ -3738,6 +3746,16 @@ class SwapikiApp {
     this._renderJobsResults();
   }
 
+  toggleJobsMinFit(minScore = 75) {
+    this.jobsMinFit = (this.jobsMinFit === minScore) ? 0 : minScore;
+    this.jobsShown = JOBS_PAGE_SIZE;
+    const controls = document.getElementById('jobs-controls');
+    if (controls) {
+      controls.innerHTML = this._jobsBoardControls();
+    }
+    this._renderJobsResults();
+  }
+
   setJobsType(type) {
     this.jobsType = type;
     this.renderJobsView();
@@ -4008,6 +4026,11 @@ class SwapikiApp {
           <span class="material-symbols-outlined text-[14px]">auto_awesome</span>
           <span>${isPersonalized ? 'Profile Fit Active' : 'Filter by My Profile'}</span>
         </button>
+        ${isPersonalized ? `
+        <button onclick="app.toggleJobsMinFit(75)" id="btn-chip-strong-fit" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${this.jobsMinFit === 75 ? 'bg-emerald-700 text-white shadow-xs' : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'}">
+          <span class="material-symbols-outlined text-[14px]">verified</span>
+          <span>${this.jobsMinFit === 75 ? 'Strong Fits Only (75%+)' : '75%+ Strong Fits'}</span>
+        </button>` : ''}
       </div>`;
   }
 
@@ -4109,6 +4132,10 @@ class SwapikiApp {
       if (tab === 'personalized' && j._pm && typeof j._pm.overall === 'number' && j._pm.overall < 30) {
         return false;
       }
+      if (isPersonalized && this.jobsMinFit && this.jobsMinFit > 0) {
+        const score = (j._pm && typeof j._pm.overall === 'number') ? j._pm.overall : 0;
+        if (score < this.jobsMinFit) return false;
+      }
       return true;
     });
 
@@ -4136,6 +4163,28 @@ class SwapikiApp {
       const skillsDisplay = expList.slice(0, 3).join(', ') + (expList.length > 3 ? ` +${expList.length - 3}` : '');
       const projCount = Array.isArray(profile.projects) ? profile.projects.length : 0;
       const firstProject = projCount > 0 ? (profile.projects[0].title || '') : '';
+
+      const missingSkillCounts = {};
+      filtered.slice(0, 15).forEach(j => {
+        if (j._pm && j._pm.skills && Array.isArray(j._pm.skills.missing)) {
+          j._pm.skills.missing.forEach(s => {
+            if (s && s.length > 1) {
+              missingSkillCounts[s] = (missingSkillCounts[s] || 0) + 1;
+            }
+          });
+        }
+      });
+      const topMissingSkills = Object.keys(missingSkillCounts)
+        .sort((a, b) => missingSkillCounts[b] - missingSkillCounts[a])
+        .slice(0, 3);
+      const boostTipHtml = topMissingSkills.length > 0 ? `
+        <div class="mt-3 pt-3 border-t border-indigo-800/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div class="flex items-center gap-1.5 text-indigo-200">
+            <span class="material-symbols-outlined text-amber-300 text-sm">lightbulb</span>
+            <span><strong>Boost your matches:</strong> Adding <span class="text-amber-200 font-semibold">${this.escapeHtml(topMissingSkills.join(', '))}</span> to your profile projects could unlock higher match scores.</span>
+          </div>
+          <button onclick="router.navigate('dashboard')" class="text-amber-300 hover:text-white font-bold text-[11px] underline">Add to profile &rarr;</button>
+        </div>` : '';
 
       personalizedBanner = `
         <div class="bg-gradient-to-br from-slate-900 via-indigo-950 to-primary text-white rounded-2xl p-5 mb-5 shadow-lg border border-indigo-800/40">
@@ -4179,6 +4228,7 @@ class SwapikiApp {
               <p class="font-bold text-white truncate" title="${this.escapeHtml(firstProject || `${projCount} Projects`)}">${projCount} Project${projCount === 1 ? '' : 's'}${firstProject ? ` (${this.escapeHtml(firstProject)})` : ''}</p>
             </div>
           </div>
+          ${boostTipHtml}
         </div>`;
     }
 
@@ -4498,21 +4548,80 @@ const hasUrl = !!applyTarget;
     if (el) el.remove();
   }
 
-  copyMyJobProfileLink() {
-    const link = this._jobApplyLink || '';
-    if (!link) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(link).then(() => this.showToast('Proof link copied — send it to the job contact.'));
-    } else {
-      const ta = document.createElement('textarea');
-      ta.value = link;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      this.showToast('Proof link copied — send it to the job contact.');
-    }
+  openPersonalizedFitModal(jobId) {
+    const job = Array.isArray(this._jobsCache) ? this._jobsCache.find(j => j.id === jobId) : null;
+    if (!job) return;
+    const profile = (typeof swapikiStore !== 'undefined' && swapikiStore && typeof swapikiStore.getProfile === 'function')
+      ? swapikiStore.getProfile()
+      : null;
+    if (!profile) return;
+    const pMatch = (typeof window.profileMatch !== 'undefined' && window.profileMatch && typeof window.profileMatch.computePersonalizedMatch === 'function')
+      ? window.profileMatch.computePersonalizedMatch(profile, job)
+      : null;
+    const html = (typeof window.profileMatch !== 'undefined' && window.profileMatch && typeof window.profileMatch.renderPersonalizedFitModalHtml === 'function')
+      ? window.profileMatch.renderPersonalizedFitModalHtml(job, profile, pMatch)
+      : '';
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-profile-fit';
+    overlay.className = 'fixed inset-0 z-[99999] bg-neutral-900/60 flex items-center justify-center p-4';
+    overlay.innerHTML = `
+      <div class="bg-white rounded-2xl max-w-5xl w-full shadow-2xl relative border border-blue-100 max-h-[92vh] overflow-y-auto [scrollbar-width:none] [::-webkit-scrollbar]:hidden">
+        <button onclick="app.closePersonalizedFitModal()" class="absolute top-6 right-6 z-10 text-blue-700 hover:text-blue-950 hover:bg-blue-50 rounded-full p-1.5 transition-colors">
+          <span class="material-symbols-outlined text-2xl">close</span>
+        </button>
+        ${html}
+      </div>`;
+    document.body.appendChild(overlay);
   }
+
+  closePersonalizedFitModal() {
+    const el = document.getElementById('modal-profile-fit');
+    if (el) el.remove();
+  }
+
+  renderJobCard(j) {
+    const skills = (Array.isArray(j.skills) ? j.skills : []).slice(0, 5).map(s =>
+      `<span class="bg-slate-100 text-slate-600 rounded-full px-2.5 py-1 text-[10px] font-bold">${this.escapeHtml(s)}</span>`).join('');
+    const sourceLabel = 'Posted by Swapiki';
+    const type = this._jobType(j);
+    const mode = this._jobMode(j);
+    const typeBadge = `<span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${type === 'internship' ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${type === 'internship' ? 'Internship' : 'Job'}</span>`;
+    const modeBadge = `<span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${mode === 'remote' ? 'bg-sky-50 text-sky-700 border border-sky-200' : mode === 'hybrid' ? 'bg-violet-50 text-violet-700 border border-violet-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}">${mode === 'remote' ? 'Remote / WFH' : mode === 'hybrid' ? 'Hybrid' : 'Onsite'}</span>`;
+    const applyBy = (j.raw_text || '').match(/Apply\\s*by\\s*:\\s*([0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+20\\d{2})/i);
+    return `
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition-all">
+        <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <div class="min-w-0">
+            <h3 class="font-bold text-slate-900">${this.escapeHtml(j.title)}</h3>
+            <p class="text-xs text-slate-500 mt-0.5">${this.escapeHtml(j.company)}${j.location ? ' · ' + this.escapeHtml(j.location) : ''}</p>
+          </div>
+          <div class="flex flex-col items-end gap-1.5 shrink-0">
+            <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200"><span class="material-symbols-outlined text-[12px]">share</span>${this.escapeHtml(sourceLabel)}</span>
+            ${this.jobMatchPill(j)}
+            <button onclick="app.openPersonalizedFitModal('${j.id}')" class="text-xs text-indigo-600 underline mt-1">Why this match?</button>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5 mb-2">
+          ${typeBadge}${modeBadge}${this.jobFeaturedLabel(j)}
+          ${applyBy ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"><span class="material-symbols-outlined text-[12px]">event</span>Apply by ${this.escapeHtml(applyBy[1])}</span>` : ''}
+        </div>
+        ${skills ? `<div class="flex flex-wrap gap-1.5 mt-1 mb-3">${skills}</div>` : ''}
+        ${j.salary ? `<p class="text-[11px] text-slate-400 flex items-center gap-1 mb-1"><span class="material-symbols-outlined text-[13px]">payments</span>${this.escapeHtml(j.salary)}</p>` : ''}
+        ${j.description ? `<p class="text-xs text-slate-600 leading-relaxed mb-3">${this.escapeHtml(j.description)}</p>` : ''}
+        ${j._pm && j._pm.reasons && j._pm.reasons.length > 0 ? `
+        <div class="flex flex-wrap items-center gap-1.5 mt-2.5 pt-2.5 mb-3 border-t border-slate-100 text-[11px]">
+          <span class="font-bold text-[10px] uppercase tracking-wider text-indigo-700 flex items-center gap-0.5">
+            <span class="material-symbols-outlined text-[13px]">auto_awesome</span> Profile Fit:
+          </span>
+          ${j._pm.reasons.map(r => `<span class="bg-indigo-50/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-md text-[10px] border border-indigo-100/80">${this.escapeHtml(r)}</span>`).join('')}
+        </div>` : ''}
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <button onclick="app.openJobApplyModal('${j.id}')" class="px-4 py-2 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary/90 transition-all">Apply with my profile</button>
+          <button onclick="app.openJobShareModal('${j.id}')" title="Share this job" aria-label="Share this job" class="px-3 py-2 border border-slate-200 text-slate-600 font-bold text-xs rounded-lg hover:bg-slate-50 hover:text-primary transition-all inline-flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">share</span>Share</button>
+        </div>
+      </div>`;
+  }
+
 
   // ---------------------------------------------------------------------
   // RESUME DRAFT BUILDER
@@ -8618,7 +8727,7 @@ if (statusDot) {
    * The count lives on the candidate's row in Supabase (loginReminderCount),
    * so it follows the account across devices/browsers, not just this one.
    */
-  maybeShowProfileReminder() {
+   maybeShowProfileReminder() {
     const profile = swapikiStore.getProfile();
     const handleIsLocked = !!profile.locked && !!profile.username;
     if (handleIsLocked) return; // profile's already set up, nothing to nag about
@@ -8626,6 +8735,288 @@ if (statusDot) {
     const count = swapikiStore.incrementLoginReminderCount();
     this.openProfileReminderModal(count > 2);
   }
+
+  // ---------------------------------------------------------------------
+  // FIRST-TIME SIGN-IN GUIDED TOUR
+  // Spotlight tour: reads [data-tour] anchors, rings them, explains action
+  // ---------------------------------------------------------------------
+
+  _guidedTourSteps() {
+    return [
+      {
+        key: 'welcome',
+        icon: 'waving_hand',
+        title: 'Welcome to Swapiki',
+        body: 'Let’s take a quick tour of your dashboard. We’ll point to each key area so you know exactly where to go to build a proof profile that stands out.'
+      },
+      {
+        key: 'nav-dashboard',
+        icon: 'dashboard',
+        title: 'Dashboard',
+        body: 'Your home base. Here you’ll see your profile status, readiness checklist, proof projects, and quick actions to get started.'
+      },
+      {
+        key: 'nav-edit-profile',
+        icon: 'edit',
+        title: 'Edit Profile',
+        body: 'Add your name, title, location, bio, and links. Your handle locks once saved, so pick a clean one like rahul92.'
+      },
+      {
+        key: 'nav-profile',
+        icon: 'badge',
+        title: 'Preview your public profile',
+        body: 'Tap this anytime to see exactly what a hiring manager sees when they open your public link.'
+      },
+      {
+        key: 'nav-jobs',
+        icon: 'work',
+        title: 'Browse jobs',
+        body: 'Browse real jobs and internships across India. No AI scoring, no auto-rejection. Apply when there’s a real fit.'
+      },
+      {
+        key: 'dash-status',
+        icon: 'verified_user',
+        title: 'Profile status',
+        body: 'Shows if your profile is Draft or Published. Until you publish, only you can see it — share with others only after publishing.'
+      },
+      {
+        key: 'add-project',
+        icon: 'add_circle',
+        title: 'Add a proof project',
+        body: 'Start here. Add at least one real project with your role, impact, tools, and a link if you have one. This is what builds trust.'
+      },
+      {
+        key: 'dash-checklist',
+        icon: 'checklist',
+        title: 'Profile readiness checklist',
+        body: 'Follow these steps in order. Each item tells you exactly what’s missing and takes you straight to the right place.'
+      },
+      {
+        key: 'dash-voice',
+        icon: 'mic',
+        title: 'Record a voice walkthrough',
+        body: 'Explain one project in your own voice (30s minimum). Read the on-screen random code aloud to earn the “Live recording confirmed” badge.'
+      },
+      {
+        key: 'dash-share',
+        icon: 'share',
+        title: 'Share your profile link',
+        body: 'Copy and share your public link (your-handle.swapiki.com). That’s the link to send on resumes, DMs, or emails.'
+      },
+      {
+        key: 'dash-publish',
+        icon: 'rocket_launch',
+        title: 'Publish your profile',
+        body: 'Once you have at least one proof project, hit Publish. After that, your profile becomes visible to hiring managers.'
+      },
+      {
+        key: 'dash-public',
+        icon: 'link',
+        title: 'Your public proof profile',
+        body: 'Keep this link handy. It shows your projects + voice walkthrough — real proof, no resume PDF required.'
+      }
+    ];
+  }
+
+  _guidedTourKey() {
+    try {
+      const u = swapikiStore.currentUser;
+      const id = u && (u.id || u.email);
+      return id ? `swapiki:guided-tour:v1:${id}` : 'swapiki:guided-tour:v1:anon';
+    } catch (e) {
+      return 'swapiki:guided-tour:v1:anon';
+    }
+  }
+
+  _shouldShowGuidedTour() {
+    try {
+      if (!swapikiStore || !swapikiStore.currentUser) return false;
+      const key = this._guidedTourKey();
+      if (localStorage.getItem(key)) return false;
+      const host = window.location.hostname;
+      if (host && host.endsWith('.swapiki.com') && host !== 'www.swapiki.com' && host !== 'swapiki.com') return false;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  maybeStartGuidedTour() {
+    try {
+      if (!this._shouldShowGuidedTour()) return;
+      const user = swapikiStore.currentUser;
+      const authUser = user || {};
+      let isVeryNew = false;
+      if (authUser.created_at && authUser.last_sign_in_at) {
+        const createdMs = new Date(authUser.created_at).getTime();
+        const lastSignInMs = new Date(authUser.last_sign_in_at).getTime();
+        isVeryNew = Math.abs(lastSignInMs - createdMs) < 60000;
+      }
+      if (!isVeryNew) {
+        const profile = swapikiStore.getProfile ? swapikiStore.getProfile() : {};
+        if (profile && profile.completionScore >= 70) return;
+      }
+      setTimeout(() => {
+        try { this.startGuidedTour(); } catch (e) { /* ignore */ }
+      }, 650);
+    } catch (e) { /* ignore */ }
+  }
+
+  startGuidedTour() {
+    try {
+      this._tourSteps = this._guidedTourSteps();
+      this._tourIndex = 0;
+      const root = document.getElementById('tour-root');
+      if (!root) return;
+      root.classList.remove('hidden');
+      // Ensure we're on dashboard view for relevant steps
+      try {
+        if (typeof router !== 'undefined' && router && router.currentView !== 'dashboard' && swapikiStore && swapikiStore.currentUser) {
+          router.navigate('dashboard', true);
+        }
+      } catch (e) { /* ignore */ }
+      setTimeout(() => this._renderGuidedTourStep(true), 120);
+      window.removeEventListener('resize', this._tourResizeHandler || (() => {}));
+      this._tourResizeHandler = () => this._renderGuidedTourStep(false);
+      window.addEventListener('resize', this._tourResizeHandler);
+    } catch (e) { /* ignore */ }
+  }
+
+  _renderGuidedTourStep(ensureView) {
+    try {
+      const steps = this._tourSteps || [];
+      const idx = this._tourIndex || 0;
+      const step = steps[idx];
+      if (!step) return this.finishGuidedTour();
+      const root = document.getElementById('tour-root');
+      const spotlight = document.getElementById('tour-spotlight');
+      const popover = document.getElementById('tour-popover');
+      const titleEl = document.getElementById('tour-title');
+      const bodyEl = document.getElementById('tour-body');
+      const iconEl = document.getElementById('tour-icon');
+      const countEl = document.getElementById('tour-step-count');
+      const nextBtn = document.getElementById('tour-next');
+      const backBtn = document.getElementById('tour-back');
+      if (titleEl) titleEl.textContent = step.title || '';
+      if (bodyEl) bodyEl.textContent = step.body || '';
+      if (iconEl) iconEl.textContent = step.icon || 'info';
+      if (countEl) countEl.textContent = `Step ${idx + 1} of ${steps.length}`;
+      if (backBtn) backBtn.disabled = idx === 0;
+      if (nextBtn) nextBtn.textContent = (idx === steps.length - 1) ? 'Got it' : 'Next';
+
+      if (step.key === 'welcome') {
+        if (spotlight) spotlight.classList.add('hidden');
+        if (popover) {
+          popover.style.left = '50%';
+          popover.style.top = '50%';
+          popover.style.transform = 'translate(-50%, -50%)';
+          popover.style.opacity = '1';
+        }
+        return;
+      }
+
+      // Navigate to the right view when needed
+      try {
+        if (step.key === 'nav-jobs') {
+          if (typeof router !== 'undefined' && router) router.navigate('jobs', true);
+        } else if (['nav-dashboard','nav-edit-profile','nav-profile','dash-status','add-project','dash-checklist','dash-voice','dash-share','dash-publish','dash-public'].includes(step.key)) {
+          if (typeof router !== 'undefined' && router && router.currentView !== 'dashboard') router.navigate('dashboard', true);
+        }
+      } catch (e) { /* ignore */ }
+
+      const el = document.querySelector(`[data-tour="${step.key}"]`);
+      if (!el) {
+        if (spotlight) spotlight.classList.add('hidden');
+        if (popover) {
+          popover.style.left = '50%';
+          popover.style.top = '50%';
+          popover.style.transform = 'translate(-50%, -50%)';
+        }
+        return;
+      }
+      if (ensureView) {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch (e) { /* ignore */ }
+      }
+      setTimeout(() => {
+        try {
+          const rect = el.getBoundingClientRect();
+          if (spotlight) {
+            spotlight.style.left = (rect.left - 6) + 'px';
+            spotlight.style.top = (rect.top - 6) + 'px';
+            spotlight.style.width = (rect.width + 12) + 'px';
+            spotlight.style.height = (rect.height + 12) + 'px';
+            spotlight.classList.remove('hidden');
+          }
+          if (popover) {
+            const margin = 14;
+            const pw = 340;
+            let left = rect.left;
+            let top = rect.bottom + margin + 6;
+            if (top + 260 > window.innerHeight) {
+              top = rect.top - 260 - margin - 6;
+            }
+            if (left + pw > window.innerWidth - margin) {
+              left = window.innerWidth - pw - margin;
+            }
+            if (left < margin) left = margin;
+            if (top < margin) top = margin;
+            popover.style.left = left + 'px';
+            popover.style.top = top + 'px';
+            popover.style.transform = 'none';
+            popover.style.maxWidth = 'calc(100vw - 28px)';
+          }
+        } catch (e) { /* ignore */ }
+      }, ensureView ? 280 : 0);
+    } catch (e) { /* ignore */ }
+  }
+
+  nextGuidedTourStep() {
+    try {
+      const steps = this._tourSteps || [];
+      const idx = this._tourIndex || 0;
+      if (idx < steps.length - 1) {
+        this._tourIndex = idx + 1;
+        this._renderGuidedTourStep(true);
+        return;
+      }
+      this.finishGuidedTour();
+    } catch (e) {
+      this.finishGuidedTour();
+    }
+  }
+
+  prevGuidedTourStep() {
+    try {
+      const idx = this._tourIndex || 0;
+      if (idx <= 0) return;
+      this._tourIndex = idx - 1;
+      this._renderGuidedTourStep(true);
+    } catch (e) { /* ignore */ }
+  }
+
+  skipGuidedTour() {
+    this._closeGuidedTour('skipped');
+  }
+
+  finishGuidedTour() {
+    this._closeGuidedTour('done');
+  }
+
+  _closeGuidedTour(state) {
+    try {
+      localStorage.setItem(this._guidedTourKey(), state || 'done');
+    } catch (e) { }
+    try {
+      const root = document.getElementById('tour-root');
+      if (root) root.classList.add('hidden');
+      if (this._tourResizeHandler) {
+        window.removeEventListener('resize', this._tourResizeHandler);
+        this._tourResizeHandler = null;
+      }
+    } catch (e) { }
+  }
+
+
 
   openProfileReminderModal(mandatory) {
     const modal = document.getElementById('modal-profile-reminder');

@@ -165,6 +165,15 @@ test('the job page states the job and where it sits, as one structured graph', a
   const crumbs = graph.find((n) => n['@type'] === 'BreadcrumbList');
   assert.equal(crumbs.itemListElement.length, 3);
   assert.equal(crumbs.itemListElement[1].item, 'https://swapiki.com/jobs');
+
+  // The page carries its posting and its breadcrumb, and no carousel. An
+  // ItemList is Google's carousel markup, and a carousel is only supported next
+  // to a Course list, a Movie, a Recipe or a Restaurant - so a list of
+  // neighbouring job pages could only register as invalid items. The neighbours
+  // are linked in the visible "Other open roles" list instead.
+  assert.equal(graph.filter((n) => n['@type'] === 'ItemList').length, 0, 'a job page is not a carousel');
+  assert.equal((JSON.stringify(graph).match(/"ListItem"/g) || []).length, 3,
+    'only the breadcrumb has list items');
 });
 
 test('a job page links to its neighbours, which is how a crawler walks the set', async () => {

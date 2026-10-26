@@ -1,3 +1,6 @@
 node_modules/
 .dev.vars
 .env
+*.mp4
+test.txt
+test_output.txt

@@ -51,6 +51,8 @@ import {
 import { curateBatch, CURATE_RULES, UNDECIDED_EXPIRY_DAYS } from "./lib/curate.js";
 import { isMissingColumnError, rest } from "./lib/postgrest.js";
 import { json, secretMatches } from "./lib/http.js";
+import { pingIndexNow } from "./lib/indexnow.js";
+import { pingGoogleIndexing } from "./lib/google-indexing.js";
 
 const DEFAULT_SUPABASE_URL = "https://eusbnfgfurrmrccaxbub.supabase.co";
 const MAX_PAGES_PER_QUERY = 2;
@@ -100,7 +102,10 @@ async function applyCuration(supabaseUrl, serviceKey, dryRun) {
       // match on its own. Curation falls back to the description for exactly
       // those rows, so without this column the queue can only ever be reviewed
       // by hand.
-      "jobs?select=id,title,company,category,salary,first_seen_at,raw_text&status=eq.draft&source=eq.adzuna&order=first_seen_at.asc"
+      // location is selected alongside the match columns because it is part of
+      // the slug: a URL built without it would not be the canonical address of
+      // the page it points at.
+      "jobs?select=id,title,company,location,category,salary,first_seen_at,raw_text&status=eq.draft&source=eq.adzuna&order=first_seen_at.asc"
     )) || [];
 
   if (!rows.length) {
@@ -166,6 +171,8 @@ async function applyCuration(supabaseUrl, serviceKey, dryRun) {
   const rejected = await setStatus(toReject, "rejected");
   const expiredCount = await setStatus(expiredIds, "rejected");
 
+  const byId = new Map(rows.map(r => [r.id, r]));
+
   return {
     dryRun: false,
     summary,
@@ -174,8 +181,38 @@ async function applyCuration(supabaseUrl, serviceKey, dryRun) {
     expired: expiredCount,
     expireBefore,
     leftAsDraft: summary.review - expiredCount,
+    // The rows that just reached the public board, so the caller can tell search
+    // engines about the exact URLs that became canonical a moment ago. Counts are
+    // not enough: IndexNow takes addresses, not identifiers.
+    publishedJobs: toPublish.map(id => byId.get(id)).filter(Boolean),
     rules: CURATE_RULES
   };
+}
+
+/**
+ * Curation, followed by the search-engine pings for whatever it just published.
+ *
+ * The pings are deliberately wrapped here rather than inside applyCuration: the
+ * DB write must never depend on a search engine being reachable, so a 429 or a
+ * timeout is returned as data on curation.indexnow / curation.googleIndexing
+ * instead of taking down the publication that succeeded without it. IndexNow
+ * covers Bing and friends; Google answers the Indexing API separately, and its
+ * 200-a-day quota means it carries its own batch cap - see
+ * functions/lib/google-indexing.js.
+ */
+async function curateAndSubmit(supabaseUrl, serviceKey, cfg, errors) {
+  const curation = await applyCuration(supabaseUrl, serviceKey, false);
+  try {
+    curation.indexnow = await pingIndexNow(curation.publishedJobs, { env: cfg });
+  } catch (err) {
+    errors.push(`indexnow: ${(err && err.message) || "failed"}`);
+  }
+  try {
+    curation.googleIndexing = await pingGoogleIndexing(curation.publishedJobs, { env: cfg });
+  } catch (err) {
+    errors.push(`google-indexing: ${(err && err.message) || "failed"}`);
+  }
+  return curation;
 }
 
 /**
@@ -395,7 +432,7 @@ export async function onRequestPost(context) {
     const empty = { inserted: 0, refreshed: 0, skipped: 0, queries, errors, note: "No usable listings returned." };
     if (wantsCuration) {
       try {
-        empty.curation = await applyCuration(supabaseUrl, serviceKey, false);
+        empty.curation = await curateAndSubmit(supabaseUrl, serviceKey, cfg, errors);
       } catch (err) {
         errors.push(`curate: ${(err && err.message) || "failed"}`);
       }
@@ -527,7 +564,7 @@ export async function onRequestPost(context) {
   // case returned above without reaching the feed.
   if (wantsCuration) {
     try {
-      body.curation = await applyCuration(supabaseUrl, serviceKey, false);
+      body.curation = await curateAndSubmit(supabaseUrl, serviceKey, cfg, errors);
     } catch (err) {
       errors.push(`curate: ${(err && err.message) || "failed"}`);
     }

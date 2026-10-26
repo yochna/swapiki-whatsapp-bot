@@ -48,7 +48,7 @@ function job(id, title, over = {}) {
  * gates a user to one email per 14 days. Empty (the default) means nobody has
  * received a drop yet.
  */
-async function sendDigest({ jobs, clicks = new Map(), missingFeatured = false, digestSends = [], resendStatuses = [], emailPreferences = [] } = {}) {
+async function sendDigest({ jobs, clicks = new Map(), missingFeatured = false, digestSends = [], resendStatuses = [], emailPreferences = [], users = [{ id: 'u1', email: 'ada@example.com' }], candidates = [{ user_id: 'u1', name: 'Ada Lovelace', expertise: [] }] } = {}) {
   const mod = await import(DIGEST_URL);
   const realFetch = globalThis.fetch;
   const sent = [];
@@ -64,10 +64,10 @@ async function sendDigest({ jobs, clicks = new Map(), missingFeatured = false, d
       return new Response(status >= 400 ? JSON.stringify({ message: 'throttled' }) : '{}', { status, headers });
     }
     if (url.includes('/auth/v1/admin/users')) {
-      return new Response(JSON.stringify({ users: [{ id: 'u1', email: 'ada@example.com' }] }), { status: 200 });
+      return new Response(JSON.stringify({ users }), { status: 200 });
     }
     if (url.includes('/rest/v1/candidates')) {
-      return new Response(JSON.stringify([{ user_id: 'u1', name: 'Ada Lovelace', expertise: [] }]), { status: 200 });
+      return new Response(JSON.stringify(candidates), { status: 200 });
     }
     if (url.includes('/rest/v1/jobs')) {
       if (missingFeatured && /featured/.test(url)) {
@@ -220,6 +220,35 @@ test('an unsubscribed user is skipped and reported', async () => {
   assert.equal(body.sent, 0, 'an "off" user must never be emailed');
   assert.equal(body.skipped, 1);
   assert.equal(body.unsubscribed, 1);
+});
+
+test('an account with no profile is not an audience for the drop', async () => {
+  // The drop is for people who used the site. An auth account with no candidate
+  // row never got past signup, so it must not be emailed even though it has an
+  // address.
+  const { status, body } = await sendDigest({
+    jobs: [job('a', 'Any job')],
+    users: [
+      { id: 'u1', email: 'did@example.com' },
+      { id: 'u2', email: 'ghost@example.com' }
+    ],
+    candidates: [{ user_id: 'u1', name: 'Did Sign Up', expertise: [] }]
+  });
+  assert.equal(status, 200);
+  assert.equal(body.recipients, 2);
+  assert.equal(body.sent, 1, 'only the account with a profile is emailed');
+  assert.equal(body.skipped, 1, 'the profile-less account is skipped');
+});
+
+test('a seeded sample profile does not qualify its account', async () => {
+  // Dummy rows exist to make the board look alive; they are not a person who
+  // used the site. Recognised by the `dummy-` id prefix as well as the flag.
+  const { body } = await sendDigest({
+    jobs: [job('a', 'Any job')],
+    users: [{ id: 'du', email: 'sample@example.com' }],
+    candidates: [{ id: 'dummy-42', user_id: 'du', name: 'Sample', expertise: [] }]
+  });
+  assert.equal(body.sent, 0, 'a dummy profile must never make its account eligible');
 });
 
 test('a monthly user inside 30 days is held back', async () => {

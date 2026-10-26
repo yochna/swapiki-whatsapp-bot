@@ -12,7 +12,7 @@
 // says. This file exists for the other half of the problem: an engine that wants
 // to enumerate, count or diff the board without fetching 500 pages.
 
-import { esc, jobMetaDescription, jobSlug, safeApplyUrl } from "./jobs-feed.js";
+import { esc, jobDatePosted, jobMetaDescription, jobSlug, safeApplyUrl } from "./jobs-feed.js";
 import { numericOrNull } from "./postgrest.js";
 
 export const BOARD_URL = "https://swapiki.com/jobs";
@@ -52,7 +52,7 @@ const jobRecord = (j) => {
     company: j.company || "",
     location: j.location || "",
     category: j.category || "any",
-    datePosted: String(j.first_seen_at || "").slice(0, 10) || null,
+    datePosted: jobDatePosted(j) || null,
     url: `${SITE_URL}/jobs/${jobSlug(j)}`,
     description: jobMetaDescription(j)
   };

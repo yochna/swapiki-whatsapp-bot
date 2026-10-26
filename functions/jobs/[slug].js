@@ -23,12 +23,14 @@
 
 import {
   DEFAULT_SUPABASE_URL, esc, safeApplyUrl, jsonForScript, jsonLdBlock,
-  fetchPublishedJobById, fetchPublishedJobs, jobSlug, idFromSlug, jobPostingFor
+  fetchPublishedJobById, fetchBoardPage, jobSlug, idFromSlug, jobPostingFor,
+  jobDatePosted, jobBodyParagraphs
 } from "../lib/jobs-feed.js";
 import {
-  SITE_URL, ORG_ID, SITE_ID, graph, itemList, organization, website
+  SITE_URL, ORG_ID, SITE_ID, graph, organization, website
 } from "../lib/schema.js";
 import { shareRow } from "../lib/share.js";
+import { cacheMatch, cachePut, cacheState, withCacheState } from "../lib/page-cache.js";
 
 const SITE = SITE_URL;
 
@@ -155,6 +157,13 @@ export async function onRequestGet(context) {
     );
   }
 
+  // A warm copy answers here without a single query. This page used to read the
+  // entire published corpus to pick its eight neighbours, so it was slow to
+  // arrive and pointless to repeat; now it is one page of the board on a miss
+  // and nothing at all on a hit.
+  const warm = await cacheMatch(context);
+  if (warm) return withCacheState(warm, "HIT");
+
   const job = await fetchPublishedJobById(supabaseUrl, serviceKey, id);
 
   if (!job) {
@@ -175,20 +184,31 @@ export async function onRequestGet(context) {
   const title = pageTitleFor(job);
   const description = metaDescriptionFor(job);
   const applyUrl = safeApplyUrl(job.apply_url);
-  const bodyText = textOnly(job.description);
+  const bodyText = jobBodyParagraphs(job);
   const related = await relatedList(env, supabaseUrl, serviceKey, job);
 
-  const postingId = `${canonical}#posting`;
-  const postedOn = String(job.first_seen_at || "").slice(0, 10) || "";
+  // The same date the posting's schema says, from the same helper. Four
+  // listings came through the board's own form and have no arrival date, so
+  // the page's "Date posted" and the markup's datePosted must both fall back
+  // to the row's creation date - if they disagreed, the page would contradict
+  // its own structured data.
+  const postedOn = jobDatePosted(job) || "";
 
   // One connected graph: the org and the site, the page itself pointing at both,
-  // the breadcrumb trail, the posting, and the neighbours as an ordered list.
+  // the breadcrumb trail, and the posting.
   //
-  // The page node exists so `mainEntity` can point at the posting by @id, which
-  // is what lets an answer engine treat this document as the source FOR that job
-  // rather than two facts that happen to share a page. The neighbours are an
-  // ItemList because that section really is an ordered set, and an ordered set
-  // is what makes "similar roles" answerable instead of just linkable.
+  // The page node exists so the page can point at the org and the site. There is
+  // no mainEntity edge to the posting: the edge is how a page says "this is
+  // about that thing", but a parser that resolves it folds the posting into the
+  // page entity, and the posting stops being an item of its own. Google's own
+  // job posting markup stands alone, so this does too - the page still says what
+  // it is, through its own title, its canonical url and the breadcrumb.
+  //
+  // The neighbour roles are linked in the visible "Other open roles" list, but
+  // they are NOT marked up as an ItemList: an ItemList is Google's carousel
+  // markup, and a carousel is only supported next to a Course list, a Movie, a
+  // Recipe or a Restaurant. A list of job pages is none of those, so on a job
+  // page it could only ever register as invalid items.
   const jsonLd = `<script type="application/ld+json" id="job-jsonld">${jsonForScript(
     graph([
       organization(),
@@ -201,7 +221,6 @@ export async function onRequestGet(context) {
         description,
         isPartOf: { "@id": SITE_ID },
         about: { "@id": ORG_ID },
-        mainEntity: { "@id": postingId },
         ...(postedOn ? { datePublished: postedOn, dateModified: postedOn } : {})
       },
       {
@@ -213,14 +232,7 @@ export async function onRequestGet(context) {
           { "@type": "ListItem", position: 3, name: job.title || "Open role", item: canonical }
         ]
       },
-      jobPostingFor(job),
-      related.length
-        ? itemList(
-            `Other open roles alongside ${job.title || "this role"}`,
-            related.map((o) => ({ url: `${SITE}/jobs/${jobSlug(o)}`, name: o.title })),
-            { id: `${canonical}#related` }
-          )
-        : null
+      jobPostingFor(job)
     ])
   )}</script>`;
 
@@ -248,13 +260,13 @@ export async function onRequestGet(context) {
       <h2 style="font-size:19px;margin:28px 0 8px;color:#0F172A;">About this role</h2>
       <div style="font-size:15px;line-height:1.72;color:#334155;">
         ${
-          bodyText
-            ? esc(bodyText)
+          bodyText.length
+            ? bodyText.map((p) => `<p style="margin:0 0 12px;">${esc(p)}</p>`).join("")
             : `<p style="color:#64748B;">The employer has not published a description for this role. The facts above come straight from the listing.</p>`
         }
       </div>
 
-      <h2 style="font-size:19px;margin:34px 0 10px;color:#0F172A;">How to apply on Swapiki</h1>
+      <h2 style="font-size:19px;margin:34px 0 10px;color:#0F172A;">How to apply on Swapiki</h2>
       <p style="font-size:15px;line-height:1.72;color:#334155;margin:0;">
         Send a proof-backed profile instead of a CV: real projects with what you built, plus a
         2-minute voice walkthrough so a hiring manager can hear you explain it. No AI screening
@@ -285,12 +297,15 @@ export async function onRequestGet(context) {
         : `<p style="margin-top:48px;"><a href="/jobs" style="font-size:14px;font-weight:700;color:#1E3A8A;">See all jobs in India &rarr;</a></p>`
     }`;
 
-  return new Response(shell(title, description, canonical, jsonLd, job.title || "Open role", bodyHtml), {
+  const res = new Response(shell(title, description, canonical, jsonLd, job.title || "Open role", bodyHtml), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=1800"
+      "Cache-Control": "public, max-age=300, s-maxage=1800",
+      "x-swapiki-cache": cacheState(context)
     }
   });
+  await cachePut(context, res);
+  return res;
 }
 
 function jLabel(k, v) {
@@ -299,15 +314,24 @@ function jLabel(k, v) {
 }
 
 /**
- * The neighbour list needs the board, and the board needs the service key.
- * Without it the page still renders in full - a job page with no "other roles"
- * section is a slightly shorter page, not a broken one.
+ * The neighbour list needs a slice of the board, and the board needs the service
+ * key. Without it the page still renders in full - a job page with no "other
+ * roles" section is a slightly shorter page, not a broken one.
+ *
+ * A slice, not the board. Eight neighbours are wanted and the same-category ones
+ * are preferred, so one page of the board's own order (newest first, pin first)
+ * is a generous sample to pick them from: a couple of hundred rows in one round
+ * trip, where reading the whole corpus took thirteen and made up most of this
+ * page's server time. The pool is deliberately larger than the eight returned so
+ * a thin category still has neighbours to top itself up from.
  */
+const RELATED_POOL = 200;
+
 async function relatedList(env, supabaseUrl, serviceKey, job) {
   if (!serviceKey) return [];
   try {
-    const all = await fetchPublishedJobs(supabaseUrl, serviceKey);
-    return relatedFor(all, job);
+    const { jobs } = await fetchBoardPage(supabaseUrl, serviceKey, RELATED_POOL);
+    return relatedFor(jobs, job);
   } catch {
     return [];
   }

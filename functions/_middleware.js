@@ -89,6 +89,45 @@ async function profileResponse(request, env, handle) {
   return shellResponse(request, env, injectNoindex, null);
 }
 
+// Paths that must never be served, whatever the asset store happens to hold.
+//
+// A Pages deployment publishes the staged runtime directory as static assets.
+// If a secret file ever lands in that directory - a .env, a key, a service
+// account JSON - it becomes a public URL, and Cloudflare's edge will keep
+// serving the cached copy for as long as the asset TTL lasts, even after the
+// deployment is deleted. The only reliable fix is to never publish it AND to
+// refuse the path at the edge, which is what this list does.
+//
+// The check is on the PATH SEGMENTS, not on an exact path, so a file nested
+// deeper (whatsapp-bot/.env, worker/scheduler/.dev.vars) is caught too.
+const DENIED_PATH_SEGMENTS = new Set([
+  '.env', '.env.local', '.env.production', '.dev.vars', '.dev.vars.local',
+  'node_modules', '.git', '.wrangler', '.ssh', '.aws', '.config',
+  'whatsapp-bot', 'worker_setup', 'worker', 'workers', 'supabase'
+]);
+
+const DENIED_FILE_SUFFIXES = [
+  '.env', '.pem', '.key', '.p12', '.pfx', '.crt', '.cer',
+  'id_rsa', 'id_ed25519', 'credentials', 'service-account.json'
+];
+
+const isDeniedPath = (pathname) => {
+  const parts = pathname.split('/').filter(Boolean);
+  for (const part of parts) {
+    const lower = part.toLowerCase();
+    if (DENIED_PATH_SEGMENTS.has(lower)) return true;
+    if (DENIED_FILE_SUFFIXES.some((s) => lower.endsWith(s))) return true;
+    if (lower.endsWith('.json') && (lower.includes('service-account') || lower.includes('service_account'))) return true;
+  }
+  return false;
+};
+
+const deniedHeaders = {
+  'Content-Type': 'text/plain; charset=utf-8',
+  'Cache-Control': 'no-store, max-age=0',
+  'X-Robots-Tag': 'noindex'
+};
+
 export async function onRequest(context) {
   const url = new URL(context.request.url);
   const request = context.request;
@@ -100,6 +139,13 @@ export async function onRequest(context) {
   const forwardedHost = request.headers.get('X-Original-Host');
   const host = (forwardedHost || request.headers.get('host') || url.hostname).toLowerCase();
   const pathname = url.pathname;
+
+  // 0. Never serve a path that could carry a secret, regardless of what the
+  //    asset store holds. This runs before anything else so a stray .env in
+  //    the published directory is a 404, not a public key.
+  if (isDeniedPath(pathname)) {
+    return new Response('Not found', { status: 404, headers: deniedHeaders });
+  }
 
   // 1. Subdomain profile page: https://<handle>.swapiki.com/
   if (host.endsWith('.' + CANONICAL_HOST) && host !== 'www.' + CANONICAL_HOST) {

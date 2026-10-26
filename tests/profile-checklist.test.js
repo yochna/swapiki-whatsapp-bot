@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { buildProfileChecklist } = require('../js/profileChecklist.js');
+const { buildProfileChecklist, isProfileReviewed } = require('../js/profileChecklist.js');
 
 const emptyProfile = () => ({
   name: '',
@@ -84,4 +84,58 @@ test('handles a null profile defensively', () => {
   const { percent, doneCount } = buildProfileChecklist(null);
   assert.equal(percent, 0);
   assert.equal(doneCount, 0);
+});
+
+// ---------------------------------------------------------------------------
+// The automatic "Reviewed" badge. Live recording + a proof project + complete
+// details is the whole rule; there is deliberately no human in the loop, so
+// the badge must never light up on a profile missing any one of those.
+// ---------------------------------------------------------------------------
+
+test('a fully complete profile with a confirmed live recording is Reviewed', () => {
+  const p = fullProfile();
+  p.voiceVerified = true;
+  assert.equal(isProfileReviewed(p), true);
+});
+
+test('details + a project are not enough without a confirmed live recording', () => {
+  const p = fullProfile();
+  p.voiceVerified = false;
+  assert.equal(isProfileReviewed(p), false);
+});
+
+test('a confirmed recording without a proof project is not Reviewed', () => {
+  const p = emptyProfile();
+  p.name = 'N';
+  p.title = 'T';
+  p.location = 'L';
+  p.linkedin = 'https://linkedin.com/in/x';
+  p.voiceVerified = true;
+  assert.equal(isProfileReviewed(p), false);
+});
+
+test('a confirmed recording and a project without full details are not Reviewed', () => {
+  const p = fullProfile();
+  p.voiceVerified = true;
+  p.location = '';
+  assert.equal(isProfileReviewed(p), false);
+});
+
+test('a complete profile with a recording but not yet published is not Reviewed', () => {
+  const p = fullProfile();
+  p.voiceVerified = true;
+  p.profileStatus = 'draft';
+  assert.equal(isProfileReviewed(p), false);
+});
+
+test('a portfolio alone still counts as the details link', () => {
+  const p = fullProfile();
+  p.voiceVerified = true;
+  p.linkedin = '';
+  p.portfolio = 'https://ananya.design';
+  assert.equal(isProfileReviewed(p), true);
+});
+
+test('isProfileReviewed tolerates a null profile', () => {
+  assert.equal(isProfileReviewed(null), false);
 });

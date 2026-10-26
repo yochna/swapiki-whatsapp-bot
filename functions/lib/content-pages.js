@@ -182,6 +182,17 @@ const footer = () => {
   const links = Object.values(CONTENT_PAGES)
     .map((p) => `<a href="${p.path}" style="color:#475569;text-decoration:none;">${esc(p.eyebrow)}</a>`)
     .join('<span style="color:#CBD5E1;">&middot;</span>');
+  const hubs = [
+    ["bangalore", "Bangalore"],
+    ["hyderabad", "Hyderabad"],
+    ["pune", "Pune"],
+    ["mumbai", "Mumbai"],
+    ["delhi-ncr", "Delhi NCR"],
+    ["chennai", "Chennai"],
+    ["remote", "Remote"]
+  ]
+    .map(([slug, name]) => `<a href="/jobs/in/${slug}" style="color:#475569;text-decoration:none;">Jobs in ${esc(name)}</a>`)
+    .join('<span style="color:#CBD5E1;">&middot;</span>');
   return `<footer style="margin-top:56px;border-top:1px solid #E2E8F0;padding-top:20px;font-size:13px;">
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
       ${links}
@@ -189,6 +200,9 @@ const footer = () => {
       <a href="/jobs" style="color:#475569;text-decoration:none;">Jobs</a>
       <span style="color:#CBD5E1;">&middot;</span>
       <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:12px;">
+      ${hubs}
     </div>
     <p style="color:#94A3B8;margin:14px 0 0;">Swapiki is a sub-product of Swaniki LLP. Nothing on this page claims verification of a person or their work.</p>
   </footer>`;

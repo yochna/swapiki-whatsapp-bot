@@ -42,9 +42,20 @@ function buildProfileChecklist(profile) {
   return { items: items, doneCount: doneCount, total: items.length, percent: percent };
 }
 
+// Automatic "Verified" signal for the public profile badge. It lights up when
+// the candidate has filled in their details (name & title, location, a link),
+// added at least one proof project, had a live recording confirmed, AND
+// published the profile. It is deliberately automatic: it reports that those
+// checks passed, never that a person read and judged the profile.
+function isProfileReviewed(profile) {
+  const p = profile || {};
+  const detailsDone = isDone('name-title', p) && isDone('location', p) && isDone('links', p);
+  return !!(p.voiceVerified && isDone('project1', p) && detailsDone && isDone('published', p));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildProfileChecklist };
+  module.exports = { buildProfileChecklist, isProfileReviewed };
 }
 if (typeof window !== 'undefined' && !window.profileChecklist) {
-  window.profileChecklist = { buildProfileChecklist };
+  window.profileChecklist = { buildProfileChecklist, isProfileReviewed };
 }

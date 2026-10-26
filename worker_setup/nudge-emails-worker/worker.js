@@ -240,24 +240,31 @@ function renderTopPicksCard(pickedJobs, clicks) {
     const intern = isInternship(j);
     const link = /^https?:\/\//i.test(j.contact || '') ? j.contact : 'https://swapiki.com/#jobs';
     const clicksCount = clicks.get(j.id) || 0;
+    const detail = [
+      j.salary ? escapeHtml(j.salary) : '',
+      clicksCount > 0 ? `${clicksCount} candidate${clicksCount === 1 ? '' : 's'} applied this week` : ''
+    ].filter(Boolean).join(' &middot; ');
     return `
-      <div style="${i > 0 ? 'border-top:1px solid #E8ECF5;' : ''}padding:9px 0;">
-        <a href="${escapeHtml(link)}" style="color:#111827; font-weight:700; font-size:13px; text-decoration:none; line-height:1.35;">${escapeHtml(j.title)}</a>
-        <span style="display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; font-size:9px; font-weight:700; background:${intern ? '#FFF1F2' : '#ECFDF5'}; color:${intern ? '#E11D48' : '#047857'};">${intern ? 'INTERNSHIP' : 'JOB'}</span>
-        <div style="color:#64748B; font-size:11px; margin-top:2px;">${escapeHtml(j.company || '')}${j.location ? ' · ' + escapeHtml(j.location) : ''} · ${workMode(j)}</div>
-        <div style="color:#94A3B8; font-size:11px; margin-top:1px;">${j.salary ? escapeHtml(j.salary) : ''}${clicksCount > 0 ? ` · ${clicksCount} candidate${clicksCount === 1 ? '' : 's'} applied this week` : ''}</div>
-      </div>`;
+      <tr><td style="padding:11px 0;${i > 0 ? 'border-top:1px solid #E0E7FF;' : ''}">
+        <div style="line-height:1.35;">
+          <a href="${escapeHtml(link)}" style="color:#111827; font-weight:700; font-size:13px; text-decoration:none;">${escapeHtml(j.title)}</a><span style="display:inline-block; margin-left:7px; padding:2px 8px; border-radius:999px; font-size:9px; font-weight:800; letter-spacing:0.04em; vertical-align:middle; background:${intern ? '#FFF1F2' : '#ECFDF5'}; color:${intern ? '#BE123C' : '#047857'};">${intern ? 'INTERNSHIP' : 'JOB'}</span>
+        </div>
+        <div style="color:#64748B; font-size:11px; margin-top:3px; line-height:1.5;">${escapeHtml(j.company || '')}${j.location ? ' &middot; ' + escapeHtml(j.location) : ''} &middot; ${workMode(j)}</div>
+        ${detail ? `<div style="color:#94A3B8; font-size:11px; margin-top:2px; line-height:1.5;">${detail}</div>` : ''}
+      </td></tr>`;
   }).join('');
 
   return `
-  <div style="background:#F5F7FF; border:1px solid #E0E7FF; border-radius:12px; padding:14px 16px; margin:0 0 20px;">
-    <div style="font-size:14px; font-weight:800; color:#312E81; margin:0 0 2px;">Top picks this week</div>
-    <div style="font-size:11px; color:#6366F1; margin:0 0 6px;">Open jobs &amp; internships candidates are applying to</div>
-    ${rows}
-    <div style="padding-top:8px;">
-      <a href="https://swapiki.com/#jobs" style="color:#4338CA; font-size:12px; font-weight:700; text-decoration:none;">See all openings →</a>
-    </div>
-  </div>`;
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin:0 0 20px;">
+    <tr><td style="background:#F5F7FF; border:1px solid #E0E7FF; border-radius:14px; padding:16px 18px;">
+      <div style="font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#6366F1; margin:0 0 3px;">Top picks this week</div>
+      <div style="font-size:13px; font-weight:700; color:#312E81; margin:0 0 8px;">Open jobs &amp; internships candidates are applying to</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
+      <div style="padding-top:10px; margin-top:4px; border-top:1px solid #E0E7FF;">
+        <a href="https://swapiki.com/#jobs" style="color:#4338CA; font-size:12px; font-weight:700; text-decoration:none;">See all openings →</a>
+      </div>
+    </td></tr>
+  </table>`;
 }
 
 // --- Top searches card (the section every email opens with) ------------------
@@ -299,20 +306,22 @@ async function fetchTopSearches(env) {
 function renderTopSearchesCard(topSearches) {
   if (!topSearches || !topSearches.length) return '';
   const rows = topSearches.map(([term, count], i) => `
-      <div style="${i > 0 ? 'border-top:1px solid #E8ECF5;' : ''}padding:8px 0;">
+      <tr><td style="padding:8px 0;${i > 0 ? 'border-top:1px solid #D1FAE5;' : ''}">
         <span style="color:#0F172A; font-weight:700; font-size:13px;">&ldquo;${escapeHtml(term)}&rdquo;</span>
-        <span style="color:#64748B; font-size:11px; margin-left:4px;">${count} search${count === 1 ? '' : 'es'} this week</span>
-      </div>`).join('');
+        <span style="color:#64748B; font-size:11px; margin-left:6px;">${count} search${count === 1 ? '' : 'es'} this week</span>
+      </td></tr>`).join('');
 
   return `
-  <div style="background:#F0FDF4; border:1px solid #D1FAE5; border-radius:12px; padding:14px 16px; margin:0 0 20px;">
-    <div style="font-size:14px; font-weight:800; color:#14532D; margin:0 0 2px;">Top job searches</div>
-    <div style="font-size:11px; color:#059669; margin:0 0 6px;">What candidates are looking for this week</div>
-    ${rows}
-    <div style="padding-top:8px;">
-      <a href="https://swapiki.com/#jobs" style="color:#047857; font-size:12px; font-weight:700; text-decoration:none;">Browse all jobs →</a>
-    </div>
-  </div>`;
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin:0 0 20px;">
+    <tr><td style="background:#F0FDF4; border:1px solid #D1FAE5; border-radius:14px; padding:16px 18px;">
+      <div style="font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#059669; margin:0 0 3px;">Top job searches</div>
+      <div style="font-size:13px; font-weight:700; color:#14532D; margin:0 0 8px;">What candidates are looking for this week</div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rows}</table>
+      <div style="padding-top:10px; margin-top:4px; border-top:1px solid #D1FAE5;">
+        <a href="https://swapiki.com/#jobs" style="color:#047857; font-size:12px; font-weight:700; text-decoration:none;">Browse all jobs →</a>
+      </div>
+    </td></tr>
+  </table>`;
 }
 
 // --- Email templates (the conversation) --------------------------------------
@@ -327,12 +336,15 @@ function renderTopSearchesCard(topSearches) {
 // when a beat has two of them.
 export function renderTemplate(kind, ctx) {
   const {
-    firstName = 'there',
     completion = 0,
     steps = [],
     topSearchesHtml = '',
     topPicksHtml = ''
   } = ctx;
+
+  // The first name is the only candidate-supplied value that reaches these
+  // templates, so escape it once here and every greeting renders safely.
+  const firstName = escapeHtml(ctx.firstName || 'there');
 
   const lead = (texts) =>
     texts.map(p => `<p style="margin:0 0 14px; font-size:15px; line-height:1.6; color:#334155;">${p}</p>`).join('\n');
@@ -417,36 +429,41 @@ export function renderTemplate(kind, ctx) {
   const searchesBlock = topSearchesHtml || '';
   const picksBlock = (b.showPicks ? topPicksHtml || '' : '');
   const stepsBlock = b.steps && b.steps.length
-    ? `<ol style="margin:0 0 16px 18px; padding:0; color:#334155; font-size:15px; line-height:1.7;">
-        ${b.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
-      </ol>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin:0 0 18px;"><tr><td style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:14px; padding:16px 18px;">
+        <div style="font-size:11px; font-weight:800; letter-spacing:0.08em; text-transform:uppercase; color:#64748B; margin:0 0 8px;">What's left</div>
+        <ol style="margin:0; padding-left:20px; color:#334155; font-size:15px; line-height:1.8;">
+          ${b.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+        </ol>
+      </td></tr></table>`
     : '';
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0; padding:0; background-color:#F1F5F9; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F1F5F9; padding:32px 16px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#FFFFFF; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,0.08);">
-        <tr><td style="background-color:#1E3A8A; padding:28px 32px;">
-          <span style="font-size:20px; font-weight:700; color:#FFFFFF;">Swapiki</span>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"></head>
+<body style="margin:0; padding:0; background-color:#EEF2F7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0; color:#EEF2F7; font-size:1px;">${escapeHtml(b.subject)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EEF2F7;">
+    <tr><td align="center" style="padding:28px 14px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px; background-color:#FFFFFF; border-radius:16px; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,0.08); border:1px solid #E2E8F0;">
+        <tr><td style="background-color:#0B1E45; padding:22px 30px;">
+          <span style="font-size:20px; font-weight:800; color:#FFFFFF; letter-spacing:-0.3px;">Swapiki</span>
+          <span style="display:block; margin-top:3px; font-size:11px; color:#93A4C4;">Jobs for proof-backed profiles</span>
         </td></tr>
-        <tr><td style="padding:32px;">
-          <h1 style="margin:0 0 16px; font-size:22px; line-height:1.3; font-weight:700; color:#0F172A;">${b.heading}</h1>
+        <tr><td style="padding:30px;">
+          <h1 style="margin:0 0 16px; font-size:22px; line-height:1.3; font-weight:800; color:#0F172A; letter-spacing:-0.2px;">${b.heading}</h1>
           ${searchesBlock}
           ${lead(b.paragraphs)}
           ${stepsBlock}
           ${picksBlock}
-          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td style="border-radius:8px; background-color:#1E3A8A;">
-              <a href="${b.cta.url}" style="display:inline-block; padding:12px 28px; font-size:15px; font-weight:600; color:#FFFFFF; text-decoration:none;">${b.cta.text}</a>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:2px 0 0;"><tr>
+            <td style="border-radius:10px; background-color:#4338CA;">
+              <a href="${b.cta.url}" style="display:inline-block; padding:13px 30px; font-size:15px; font-weight:700; color:#FFFFFF; text-decoration:none;">${b.cta.text}</a>
             </td>
           </tr></table>
           <p style="margin:16px 0 0; font-size:12px; line-height:1.5; color:#64748B;">${b.footerLine}</p>
         </td></tr>
-        <tr><td style="padding:20px 32px; background-color:#F8FAFC; border-top:1px solid #E2E8F0;">
-          <p style="margin:0; font-size:12px; line-height:1.5; color:#94A3B8;">You're getting this because you created a Swapiki account. Questions? Reply to this email or write to
-          <a href="mailto:support@swapiki.com" style="color:#2563EB; text-decoration:none;">support@swapiki.com</a>.
+        <tr><td style="padding:20px 30px; background-color:#F8FAFC; border-top:1px solid #E2E8F0;">
+          <p style="margin:0; font-size:12px; line-height:1.6; color:#94A3B8;">You're getting this because you created a Swapiki account. Questions? Reply to this email or write to
+          <a href="mailto:support@swapiki.com" style="color:#4338CA; text-decoration:none;">support@swapiki.com</a>.
           Occasionally you'll get a few of these — never more than twice a week, and usually fewer.</p>
         </td></tr>
       </table>
@@ -483,8 +500,11 @@ async function sendViaZeptoMail(env, toEmail, toName, kind, ctx) {
 // --- Data reads --------------------------------------------------------------
 
 async function fetchAllCandidates(env) {
+  // NOTE: the candidates table has NO created_at column (only updated_at), so
+  // asking for it makes PostgREST 400 the whole request and aborts the run.
+  // Account age comes from auth.users.created_at instead (see fetchUserMetaByUserId).
   const res = await fetch(
-    `${env.SUPABASE_URL}/rest/v1/candidates?select=id,user_id,email,name,expertise,is_dummy,profile_status,completion_score,updated_at,last_nudge_type,last_nudge_sent_at,created_at`,
+    `${env.SUPABASE_URL}/rest/v1/candidates?select=id,user_id,email,name,expertise,is_dummy,profile_status,completion_score,updated_at,last_nudge_type,last_nudge_sent_at`,
     { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` } }
   );
   if (!res.ok) throw new Error(`Fetching candidates failed: ${res.status} ${await res.text()}`);
@@ -535,7 +555,10 @@ async function fetchClickerUserIds(env) {
   return clickers;
 }
 
-async function fetchLastSignInByUserId(env) {
+// One auth-user read that carries both signals the conversation needs: when the
+// account was created (the real account age, since candidates has no created_at)
+// and when it was last opened.
+async function fetchUserMetaByUserId(env) {
   const map = new Map();
   let page = 1;
   for (;;) {
@@ -545,7 +568,7 @@ async function fetchLastSignInByUserId(env) {
     if (!res.ok) throw new Error(`Fetching auth users failed: ${res.status} ${await res.text()}`);
     const data = await res.json();
     const users = data.users || [];
-    users.forEach(u => map.set(u.id, u.last_sign_in_at));
+    users.forEach(u => map.set(u.id, { lastSignInAt: u.last_sign_in_at, createdAt: u.created_at }));
     if (users.length < 1000) break;
     page += 1;
   }
@@ -573,10 +596,10 @@ async function markNudged(env, candidateId, kind, variant) {
 // Exported for the tests only; the Cloudflare runtime only calls the default
 // handler, which passes this straight through with a real env.
 export async function runNudgeJob(env) {
-  const [candidates, projectSignals, lastSignInByUserId, clickerIds, topPicksData, topSearches] = await Promise.all([
+  const [candidates, projectSignals, userMetaByUserId, clickerIds, topPicksData, topSearches] = await Promise.all([
     fetchAllCandidates(env),
     fetchProjectSignals(env),
-    fetchLastSignInByUserId(env),
+    fetchUserMetaByUserId(env),
     fetchClickerUserIds(env),
     fetchTopPicksData(env),
     fetchTopSearches(env)
@@ -594,12 +617,13 @@ export async function runNudgeJob(env) {
   };
 
   for (const candidate of candidates) {
+    const meta = userMetaByUserId.get(candidate.user_id) || {};
     const state = {
       hasEmail: !!(candidate.email && /@/.test(candidate.email)),
       isDummy: !!(candidate.is_dummy || /^dummy-/.test(candidate.id || '')),
-      accountAgeDays: daysAgo(candidate.created_at),
+      accountAgeDays: daysAgo(meta.createdAt || candidate.updated_at),
       lastSignInDays: daysAgo(
-        lastSignInByUserId.get(candidate.user_id) || candidate.created_at
+        meta.lastSignInAt || candidate.updated_at
       ),
       completion: percentOf(candidate),
       isPublished: candidate.profile_status === 'published',

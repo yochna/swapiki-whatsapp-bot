@@ -13,12 +13,6 @@
 // untouched, which means every visitor still gets the full SPA once the script
 // boots — the SSR output is the same page with honest social/SEO metadata.
 
-// So we fetch the deployed shell (index.html) and rewrite just its <head>:
-// title, description, canonical, Open Graph, Twitter and a Person JSON-LD block
-// all describe the profile instead of the marketing site. The body is left
-// untouched, which means every visitor still gets the full SPA once the script
-// boots — the SSR output is the same page with honest social/SEO metadata.
-
 import { shareRow } from "./lib/share.js";
 
 const DEFAULT_SUPABASE_URL = "https://eusbnfgfurrmrccaxbub.supabase.co";

@@ -78,6 +78,20 @@ test('the organization node carries a logo and an area served', () => {
   assert.equal(org.areaServed.name, 'India');
 });
 
+test('the page image points at an image, not at the app', () => {
+  // primaryImageOfPage has to resolve to an image. It used to point at the
+  // WebApplication node, and the schema.org validator rejected the whole page
+  // for it: the reference was resolvable, but the thing it resolved to was not
+  // an image. It now names the logo directly, the same image the organization
+  // points at, so the page and the company agree on one picture.
+  const ld = landingLd();
+  const page = oneOf(ld, 'CollectionPage')[0];
+  const image = page.primaryImageOfPage;
+  assert.equal(image['@type'], 'ImageObject');
+  assert.match(image.url, /^https:\/\/swapiki\.com\/assets\/logo\//);
+  assert.equal(oneOf(ld, 'Organization')[0].logo.url, image.url);
+});
+
 // ------------------------------------------- what must never be invented
 
 test('no node claims a fact the product has not established', () => {
@@ -354,11 +368,13 @@ test('neither machine document claims something the landing page refuses to', ()
 
 // ------------------------------------------- client and server agree
 
-test('the SPA emits the same directApply as the server', async () => {
-  // js/app.js injects its own JobPosting graph when a signed-in crawler renders
-  // the board, so a page can end up carrying both. Two graphs on one page
-  // disagreeing about the same job is the contradiction an engine resolves by
-  // trusting neither of them.
+test('the SPA adds no JobPosting of its own, so two graphs cannot disagree', async () => {
+  // js/app.js used to inject its own JobPosting graph when a signed-in crawler
+  // rendered the board, so a page could end up carrying both. Two graphs on one
+  // page disagreeing about the same job is the contradiction an engine resolves
+  // by trusting neither of them - and a board is a list, which may not carry
+  // postings at all, so the app now only refreshes the collection the server
+  // named.
   const { jobPostingFor } = await import(urlOf(path.join(ROOT, 'functions', 'lib', 'jobs-feed.js')));
   const posting = jobPostingFor({
     id: '11111111-2222-3333-4444-555555555555',
@@ -371,7 +387,11 @@ test('the SPA emits the same directApply as the server', async () => {
   assert.equal(posting.directApply, false, 'the server marks postings not-direct');
 
   const app = read('js/app.js');
-  assert.match(app, /pos\.directApply = false/, 'the SPA no longer agrees with the server');
+  // The app's graph must not describe a posting, and it must not invent one
+  // either - only the collection.
+  const injector = app.slice(app.indexOf('_injectJobsJsonLd(jobs) {'));
+  assert.ok(injector.length > 0, 'could not locate the app graph');
+  assert.ok(!/'@type':\s*'JobPosting'/.test(injector), 'the app still builds JobPosting nodes');
   assert.ok(!/directApply\s*=\s*true/.test(app), 'the SPA asserts directApply true somewhere');
 });
 

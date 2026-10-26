@@ -427,3 +427,100 @@ test('settling the transcript never hangs when the recogniser goes quiet', async
     assert.equal(typeof transcript, 'string');
   });
 });
+
+// ---------------------------------------------------------------------------
+// The profile-badge popups
+//
+// "Live recording confirmed" is only honest if a hover explains both what it
+// proves and how to earn it, and the page label needs the same. These pin the
+// popup on each surviving badge so the copy cannot quietly disappear.
+// ---------------------------------------------------------------------------
+
+test('each profile badge opens a hover/focus popup explaining what it is and how to get it', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+  // The label that applies to every profile carries a popup...
+  const labelAt = html.indexOf('text-[13px]">badge</span> Candidate Profile');
+  assert.ok(labelAt > -1, 'the Candidate Profile label must exist');
+  const label = html.slice(labelAt, labelAt + 1500);
+  assert.ok(label.includes('role="tooltip"'), 'the label must carry a hover popup');
+  assert.ok(label.includes('How to get'), 'the label popup must say how the badge is earned');
+  assert.ok(label.includes('update your profile') && label.includes('publish'), 'the label popup must list the earning steps');
+
+  // ...and so does the one earned badge.
+  const voiceAt = html.indexOf('id="voice-verified-badge"');
+  assert.ok(voiceAt > -1, 'voice-verified-badge must exist on the profile hero');
+  const voice = html.slice(voiceAt, voiceAt + 1800);
+  assert.ok(voice.includes('role="tooltip"'), 'the voice badge must carry a hover popup');
+  assert.ok(voice.includes('group-hover:visible'), 'the voice popup must open on hover');
+  assert.ok(voice.includes('group-focus-within:visible'), 'the voice popup must also open on keyboard focus');
+  assert.ok(voice.includes('How to get it'), 'the voice popup must say how the badge is earned');
+
+  // ...and so does the automatic "Reviewed" badge.
+  const reviewedAt = html.indexOf('id="reviewed-badge"');
+  assert.ok(reviewedAt > -1, 'reviewed-badge must exist on the profile hero');
+  const reviewed = html.slice(reviewedAt, reviewedAt + 1900);
+  assert.ok(reviewed.includes('role="tooltip"'), 'the reviewed badge must carry a hover popup');
+  assert.ok(reviewed.includes('group-hover:visible'), 'the reviewed popup must open on hover');
+  assert.ok(reviewed.includes('group-focus-within:visible'), 'the reviewed popup must also open on keyboard focus');
+  assert.ok(reviewed.includes('How to get it'), 'the reviewed popup must say how the badge is earned');
+  assert.ok(reviewed.includes('live recording'), 'the reviewed popup must name the live-recording step');
+  assert.ok(reviewed.includes('proof project'), 'the reviewed popup must name the project step');
+  assert.ok(reviewed.includes('details'), 'the reviewed popup must name the profile-details step');
+  assert.ok(reviewed.includes('publish'), 'the reviewed popup must name the publish step');
+  assert.ok(reviewed.includes('text-blue-600') || reviewed.includes('bg-blue-50'), 'the reviewed badge must render as a blue tick');
+});
+
+// The "Reviewed" badge is automatic, so it must be driven by real profile
+// state through the shared checklist rule — never set by hand or by a human.
+test('the Reviewed badge is toggled automatically from the profile data', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const checklist = fs.readFileSync(path.join(__dirname, '..', 'js', 'profileChecklist.js'), 'utf8');
+
+  assert.ok(app.includes('this.applyReviewedBadge(profile);'), 'the profile render must apply the reviewed badge');
+  assert.ok(app.includes('applyReviewedBadge(profile)'), 'the reviewed badge toggler must exist');
+  assert.ok(app.includes("document.getElementById('reviewed-badge')"), 'it must target the reviewed badge');
+  assert.ok(app.includes('window.profileChecklist.isProfileReviewed'), 'the criteria must come from the shared checklist rule');
+  assert.ok(checklist.includes('function isProfileReviewed'), 'the shared rule must define isProfileReviewed');
+  assert.ok(checklist.includes('voiceVerified') && checklist.includes('project1'), 'the rule must require a recording and a project');
+  assert.ok(checklist.includes("isDone('published'"), 'the rule must require the profile to be published');
+});
+
+// The human "Reviewed by Swapiki team" badge was retired: one person cannot
+// review every profile, so nothing may render a badge no human actually set.
+test('there is no human staff-review badge on the profile', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const store = fs.readFileSync(path.join(__dirname, '..', 'js', 'store.js'), 'utf8');
+
+  assert.ok(!html.includes('staff-review-badge'), 'the staff-review badge must not be in the shell');
+  assert.ok(!html.includes('Reviewed by Swapiki team'), 'the staff-review label must be gone');
+  assert.ok(!app.includes('adminToggleStaffReview'), 'the admin review action must be gone');
+  assert.ok(!app.includes('staffReviewedAt'), 'the app must not read a staff-review flag');
+  assert.ok(!store.includes('adminSetStaffReview'), 'the store review write must be gone');
+});
+
+// A mouse hovers, but a touch screen can't and iOS won't focus a bare <span>:
+// the same popup must also open on tap/click, and the hero card must not clip it.
+test('badge popups also toggle on tap/click, and the hero card does not clip them', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+
+  assert.ok(app.includes('this.initBadgeTooltips();'), 'init must wire up the badge tooltip taps');
+  assert.ok(app.includes("closest('.group[tabindex]')"), 'the tap must target the badge, not an arbitrary node');
+  assert.ok(app.includes('toggleBadgeTooltip') && app.includes('closeBadgeTooltips'), 'tapping must toggle the popup');
+
+  const at = html.indexOf('id="rec-avatar-img"');
+  assert.ok(at > -1, 'the profile hero must still render its avatar');
+  const cardStart = html.lastIndexOf('<div class="bg-white border', at);
+  const card = html.slice(cardStart, at);
+  assert.ok(!card.includes('overflow-hidden'), 'the profile hero card must not clip the badge popups');
+});

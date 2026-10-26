@@ -6,7 +6,9 @@ const {
   parseProfileLocation,
   matchJobLocation,
   matchJobProjects,
-  matchJobSkills
+  matchJobSkills,
+  generateVoicePitchTips,
+  renderPersonalizedFitModalHtml
 } = require('../js/profileMatch.js');
 
 const candidate = () => ({
@@ -133,3 +135,39 @@ test('computePersonalizedMatch degrades gracefully for unrelated roles', () => {
   const res = computePersonalizedMatch(c, unrelatedJob);
   assert.ok(res.overall <= 45, `expected low score for unrelated role, got ${res.overall}`);
 });
+
+test('generateVoicePitchTips produces tailored talking points for voice walkthrough', () => {
+  const c = candidate();
+  const matchingJob = {
+    id: 'job-target',
+    title: 'Lead Product Designer',
+    company: 'Fintech Unicorn',
+    location: 'Bengaluru',
+    skills: ['Design Systems', 'Figma', 'Prototyping'],
+    description: 'Lead Vernacular UPI and checkout flow interfaces for Bharat users'
+  };
+  const pMatch = computePersonalizedMatch(c, matchingJob);
+  const tips = generateVoicePitchTips(c, matchingJob, pMatch);
+  assert.equal(tips.length, 3);
+  assert.ok(tips[0].includes('Razorpay Checkout') || tips[0].includes('lead project'));
+  assert.ok(tips[1].includes('Design Systems') || tips[1].includes('tools') || tips[1].includes('mastery'));
+  assert.ok(tips[2].includes('Bengaluru'));
+});
+
+test('renderPersonalizedFitModalHtml generates rich modal markup with scores and tips', () => {
+  const c = candidate();
+  const matchingJob = {
+    id: 'job-target',
+    title: 'Lead Product Designer',
+    company: 'Fintech Unicorn',
+    location: 'Bengaluru',
+    skills: ['Design Systems', 'Figma', 'Prototyping']
+  };
+  const pMatch = computePersonalizedMatch(c, matchingJob);
+  const html = renderPersonalizedFitModalHtml(matchingJob, c, pMatch);
+  assert.ok(html.includes('Compatibility Dimensions'));
+  assert.ok(html.includes('Suggested 2-Minute Walkthrough Talking Points'));
+  assert.ok(html.includes('Razorpay Checkout'));
+  assert.ok(html.includes('Bengaluru'));
+});
+

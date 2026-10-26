@@ -348,3 +348,33 @@ test('a healthy recently-applying candidate only gets the quiet beat on its own 
   const patch = calls.find(c => c.method === 'PATCH');
   assert.equal(JSON.parse(patch.body).last_nudge_type, 'keep_fresh');
 });
+
+test('the candidates query never asks for a column the table does not have', async () => {
+  const calls = await run(ENV, network({ candidates: [] }));
+  const q = calls.find(c => c.url.includes('/rest/v1/candidates'));
+  assert.ok(q, 'the job still fetches candidates');
+  assert.ok(!/[?&]select=[^&]*\bcreated_at\b/.test(q.url),
+    'candidates has no created_at column; selecting it 400s the whole run');
+});
+
+test('account age comes from the auth user, not the candidate row', async () => {
+  const old = new Date(Date.now() - 30 * 86400000).toISOString();
+  const candidates = [candidate({
+    id: 'new', user_id: 'unew', email: 'new@example.com',
+    updated_at: old, created_at: undefined, last_sign_in_at: old
+  })];
+  const calls = await run(ENV, (url) => {
+    if (url.includes('/auth/v1/admin/users')) {
+      return new Response(JSON.stringify({
+        users: [{
+          id: 'unew',
+          created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+          last_sign_in_at: old
+        }]
+      }), { status: 200 });
+    }
+    return network({ candidates })(url);
+  });
+  assert.equal(calls.filter(c => c.url.includes('/v1.1/email')).length, 0,
+    'a one-day-old account must not be emailed');
+});

@@ -11,6 +11,8 @@
 
 import { DEFAULT_SUPABASE_URL, fetchPublishedJobs, jobSlug } from "./lib/jobs-feed.js";
 import { CONTENT_PAGES } from "./lib/content-pages.js";
+import { JOB_CITIES, HUB_MIN_JOBS, jobsInCity } from "./lib/job-hubs.js";
+import { cacheMatch, cachePut, cacheState, withCacheState } from "./lib/page-cache.js";
 
 const SITE = "https://swapiki.com";
 
@@ -18,6 +20,12 @@ export async function onRequestGet(context) {
   const { env } = context;
   const supabaseUrl = env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+  // Generating this walks every published job in pages of 500, which was several
+  // seconds of work repeated for every crawler that asked. The header already
+  // asked for an hour at the edge; this is the request that makes it happen.
+  const warm = await cacheMatch(context);
+  if (warm) return withCacheState(warm, "HIT");
 
   const jobs = await fetchPublishedJobs(supabaseUrl, serviceKey);
 
@@ -70,8 +78,34 @@ export async function onRequestGet(context) {
     priority: "0.8"
   }));
 
+  // The city hubs. Derived from the same corpus the hub pages themselves read,
+  // using the same alias match (see functions/lib/job-hubs.js), so a URL listed
+  // here is a URL the hub route will serve with jobs on it. A city that has
+  // dropped below the threshold is simply left out rather than advertised as a
+  // near-empty page — a sitemap entry that 404s costs more than one that is
+  // missing.
+  //
+  // lastmod is the newest listing in that city, which is the real "this page
+  // changed" signal: a hub gains or loses rows only when its jobs do.
+  const hubUrls = JOB_CITIES.map((city) => {
+    const list = jobsInCity(jobs, city);
+    if (list.length < HUB_MIN_JOBS) return null;
+    let newest = "";
+    for (const j of list) {
+      const d = String(j.first_seen_at || "").slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d > newest) newest = d;
+    }
+    return {
+      loc: `${SITE}/jobs/in/${city.slug}`,
+      lastmod: newest || null,
+      changefreq: "weekly",
+      priority: "0.8"
+    };
+  }).filter(Boolean);
+
   const entries = staticUrls
     .concat(contentUrls)
+    .concat(hubUrls)
     .concat(
       jobs.map((j) => ({
         loc: `${SITE}/jobs/${jobSlug(j)}`,
@@ -95,12 +129,15 @@ ${entries}
 </urlset>
 `;
 
-  return new Response(xml, {
+  const res = new Response(xml, {
     headers: {
       "Content-Type": "application/xml; charset=utf-8",
       // Short enough that a new listing is discoverable the same day, long
       // enough that the board is not refetched on every crawler request.
-      "Cache-Control": "public, max-age=900, s-maxage=3600"
+      "Cache-Control": "public, max-age=900, s-maxage=3600",
+      "x-swapiki-cache": cacheState(context)
     }
   });
+  await cachePut(context, res);
+  return res;
 }
