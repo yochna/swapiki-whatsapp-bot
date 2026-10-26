@@ -6764,6 +6764,76 @@
     <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
     <span id="toast-message">Link copied to clipboard</span>
   </div>
+  <!-- Modal scroll lock: while any #modal-* overlay is visible, the page behind
+       must not scroll or react to wheel/touch gestures. Independent of app.js. -->
+  <style>
+    html.modal-open { overscroll-behavior: none; }
+    body.modal-open { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; }
+    [id^="modal-"] { overscroll-behavior: contain; touch-action: pan-y; }
+    [id^="modal-"] form, [id^="modal-"] .overflow-y-auto { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  </style>
+  <script>
+    (function () {
+      var locked = false, savedY = 0;
+      function anyOpen() {
+        var els = document.querySelectorAll('[id^="modal-"]');
+        for (var i = 0; i < els.length; i++) {
+          var el = els[i];
+          if (!el.classList.contains('fixed')) continue;
+          if (el.classList.contains('hidden')) continue;
+          var cs = getComputedStyle(el);
+          if (cs.display !== 'none' && cs.visibility !== 'hidden') return true;
+        }
+        return false;
+      }
+      function lock() {
+        if (locked) return;
+        locked = true;
+        savedY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        var gap = window.innerWidth - document.documentElement.clientWidth;
+        document.documentElement.classList.add('modal-open');
+        document.body.classList.add('modal-open');
+        document.body.style.top = (-savedY) + 'px';
+        if (gap > 0) document.body.style.paddingRight = gap + 'px';
+      }
+      function unlock() {
+        if (!locked) return;
+        locked = false;
+        document.documentElement.classList.remove('modal-open');
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        document.body.style.paddingRight = '';
+        var root = document.documentElement, prev = root.style.scrollBehavior;
+        root.style.scrollBehavior = 'auto';
+        window.scrollTo(0, savedY);
+        root.style.scrollBehavior = prev;
+      }
+      var raf = 0;
+      function sync() {
+        if (raf) return;
+        raf = requestAnimationFrame(function () { raf = 0; anyOpen() ? lock() : unlock(); });
+      }
+      // iOS Safari: block touch scrolling that starts outside a scrollable area inside the modal
+      document.addEventListener('touchmove', function (e) {
+        if (!locked) return;
+        var t = e.target, ok = false;
+        while (t && t !== document.body) {
+          if (t.nodeType === 1 && t.scrollHeight > t.clientHeight + 1) {
+            var oy = getComputedStyle(t).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && t.closest('[id^="modal-"]')) { ok = true; break; }
+          }
+          t = t.parentNode;
+        }
+        if (!ok) e.preventDefault();
+      }, { passive: false });
+      function init() {
+        var mo = new MutationObserver(sync);
+        mo.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] });
+        sync();
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    })();
+  </script>
   <!-- Deferred, in this exact order, so parsing isn't blocked but load
        order is still guaranteed correct (defer scripts always run in
        document order, right before DOMContentLoaded). -->
