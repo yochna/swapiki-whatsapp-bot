@@ -6843,6 +6843,151 @@
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
     })();
   </script>
+  <!-- Landing motion v2: one easing curve, staggered reveals, a headline that
+       rises word by word after the intro, and calmer hover states. Scoped to
+       #view-landing.lp-motion, which the script below adds; without it the
+       page falls back to the old rules. -->
+  <style>
+    #view-landing.lp-motion { --lp-ease: cubic-bezier(.22, 1, .36, 1); }
+
+    #view-landing.lp-motion [data-reveal] {
+      opacity: 0;
+      transform: translate3d(0, 22px, 0);
+      transition: opacity .8s var(--lp-ease), transform .9s var(--lp-ease);
+      transition-delay: calc(var(--reveal-delay, 0) * 80ms);
+      animation: none;
+    }
+    #view-landing.lp-motion [data-reveal="fade"] { transform: none; }
+    #view-landing.lp-motion [data-reveal="scale"] { transform: translate3d(0, 18px, 0) scale(.98); }
+    #view-landing.lp-motion [data-reveal].is-inview { opacity: 1; transform: none; }
+
+    /* After the entrance: drop will-change and switch to quick hover timings. */
+    #view-landing.lp-motion [data-reveal].lp-done {
+      transition: transform .4s var(--lp-ease), box-shadow .4s ease, border-color .3s ease, background-color .3s ease;
+      transition-delay: 0s;
+      will-change: auto;
+    }
+    #view-landing.lp-motion .lp-card.lp-done:hover,
+    #view-landing.lp-motion .lp-step.lp-done:hover,
+    #view-landing.lp-motion .lp-rec.lp-done:hover {
+      transform: translate3d(0, -4px, 0);
+      box-shadow: 0 22px 40px -26px rgba(23, 19, 14, .35);
+    }
+
+    /* Hero headline: words rise out of a mask, one after another. */
+    #view-landing.lp-motion .lp-hero h1[data-reveal] { opacity: 1; transform: none; transition: none; }
+    #view-landing.lp-motion .lp-w {
+      display: inline-block; overflow: hidden; vertical-align: top;
+      padding: .1em .12em .18em; margin: -.1em -.12em -.18em;
+    }
+    #view-landing.lp-motion .lp-w > span {
+      display: inline-block;
+      transform: translate3d(0, 115%, 0);
+      transition: transform 1s var(--lp-ease) calc(var(--i, 0) * 80ms + 80ms);
+    }
+    #view-landing.lp-motion .lp-hero h1.is-inview .lp-w > span { transform: none; }
+
+    /* The player rises a little further and settles. */
+    #view-landing.lp-motion .lp-hero .lp-player[data-reveal] {
+      transform: translate3d(0, 48px, 0) scale(.965);
+      transition-duration: .9s, 1.2s;
+    }
+    #view-landing.lp-motion .lp-hero .lp-player.is-inview { transform: none; }
+    #view-landing.lp-motion .lp-hero .lp-player.is-inview.lp-done:hover { transform: translate3d(0, -6px, 0); }
+
+    /* The glow drifts slowly instead of blinking. */
+    #view-landing.lp-motion .lp-hero-glow { animation: lp-glow-drift 14s ease-in-out infinite alternate; }
+    @keyframes lp-glow-drift {
+      from { transform: translateX(-50%) translate3d(-4%, 0, 0) scale(1); opacity: .55; }
+      to   { transform: translateX(-50%) translate3d(4%, -5%, 0) scale(1.08); opacity: .9; }
+    }
+
+    /* Buttons: the arrow leans forward, a press feels like a press. */
+    #view-landing.lp-motion .lp-btn span[aria-hidden="true"] { display: inline-block; transition: transform .3s var(--lp-ease); }
+    #view-landing.lp-motion .lp-btn:hover span[aria-hidden="true"] { transform: translateX(4px); }
+    #view-landing.lp-motion .lp-btn:active { transform: scale(.98); }
+
+    @media (prefers-reduced-motion: reduce) {
+      #view-landing [data-reveal] { opacity: 1 !important; transform: none !important; }
+      #view-landing .lp-w > span { transform: none !important; }
+      #view-landing .lp-hero-glow { animation: none !important; }
+    }
+  </style>
+  <script>
+    (function () {
+      var root = document.getElementById('view-landing');
+      if (!root || !('IntersectionObserver' in window)) return;
+      var reduced = false;
+      try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { }
+      var items = Array.prototype.slice.call(root.querySelectorAll('[data-reveal]'));
+      if (reduced) { items.forEach(function (el) { el.classList.add('is-inview'); }); return; }
+      root.classList.add('lp-motion');
+
+      // Split the headline into words (text stays readable to screen readers).
+      var h1 = root.querySelector('.lp-hero h1');
+      if (h1) {
+        var n = 0;
+        var tmp = h1.cloneNode(true);
+        Array.prototype.forEach.call(tmp.querySelectorAll('br'), function (x) { x.parentNode.replaceChild(document.createTextNode(' '), x); });
+        h1.setAttribute('aria-label', tmp.textContent.replace(/\s+/g, ' ').trim());
+        (function split(node) {
+          Array.prototype.slice.call(node.childNodes).forEach(function (c) {
+            if (c.nodeType === 3) {
+              var frag = document.createDocumentFragment();
+              c.textContent.split(/(\s+)/).forEach(function (part) {
+                if (!part) return;
+                if (/^\s+$/.test(part)) { frag.appendChild(document.createTextNode(' ')); return; }
+                var w = document.createElement('span'); w.className = 'lp-w'; w.setAttribute('aria-hidden', 'true');
+                var i = document.createElement('span'); i.style.setProperty('--i', n++); i.textContent = part;
+                w.appendChild(i); frag.appendChild(w);
+              });
+              node.replaceChild(frag, c);
+            } else if (c.nodeType === 1 && c.nodeName !== 'BR') { split(c); }
+          });
+        })(h1);
+      }
+
+      // Stagger: siblings enter one after another; the hero follows a fixed order.
+      var heroDelay = { 'lp-eyebrow': 0, 'lp-lead': 5, 'lp-cta': 6, 'lp-micro': 7, 'lp-player': 6 };
+      var seen = new Map();
+      items.forEach(function (el) {
+        var d = 0, inHero = !!el.closest('.lp-hero');
+        if (inHero) {
+          if (el === h1) d = 1; else for (var k in heroDelay) if (el.classList.contains(k)) d = heroDelay[k];
+        } else {
+          d = Math.min(seen.get(el.parentNode) || 0, 5);
+          seen.set(el.parentNode, (seen.get(el.parentNode) || 0) + 1);
+        }
+        el.style.setProperty('--reveal-delay', d);
+        el._lpDelay = d;
+      });
+
+      var obs = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          var el = e.target;
+          el.classList.add('is-inview');
+          obs.unobserve(el);
+          setTimeout(function () { el.classList.add('lp-done'); }, 1400 + (el._lpDelay || 0) * 80);
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+
+      // The hero waits for the intro to hand over the screen.
+      var started = false;
+      function start() {
+        if (started) return; started = true;
+        items.forEach(function (el) { obs.observe(el); });
+      }
+      var b = document.body;
+      if (!b.classList.contains('splash-active')) { start(); return; }
+      var mo = new MutationObserver(function () {
+        if (!b.classList.contains('splash-active')) { mo.disconnect(); setTimeout(start, 200); }
+      });
+      mo.observe(b, { attributes: true, attributeFilter: ['class'] });
+      setTimeout(function () { mo.disconnect(); start(); }, 9000);
+    })();
+  </script>
+
   <!-- Deferred, in this exact order, so parsing isn't blocked but load
        order is still guaranteed correct (defer scripts always run in
        document order, right before DOMContentLoaded). -->
