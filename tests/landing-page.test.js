@@ -1117,7 +1117,8 @@ test('the dashboard speaks the same visual language as the landing page', () => 
     'hover:bg-white',
     'text-emerald-700',
     'text-amber-700',
-    'group-hover:scale-105',
+    // group-hover:scale-105 left this list on purpose: the project cover now shows
+    // the whole image (no crop), so it no longer zooms on hover.
   ]) {
     assert.ok(emitted.includes(cls), `the dashboard renderer no longer emits ${cls}; the theme may need updating`);
     assert.ok(

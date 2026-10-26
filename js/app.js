@@ -7178,23 +7178,26 @@ if (statusDot) {
         ? 'bg-on-tertiary-container text-tertiary-container'
         : (profile.profileStatus === 'suspended' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700');
 
+      const statusBadgeHtml = `
+        <div class="absolute top-4 right-4" style="z-index:2;pointer-events:none">
+          <span class="${statusClasses} font-label-sm text-label-sm py-1 px-3 rounded-full flex items-center gap-1 shadow-sm font-bold">
+            <span class="w-2 h-2 rounded-full bg-current opacity-70"></span> ${statusLabel}
+          </span>
+        </div>`;
+
       const card = document.createElement('div');
       card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col bento-card group";
       card.innerHTML = `
-        <div class="relative h-48 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
-          ${hasImage
-            ? `<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="${proj.imageUrl}" alt="${proj.title}"/>`
-            : `<div class="flex flex-col items-center justify-center text-slate-300">
+        ${hasImage
+          ? this._coverFrameHtml(proj, 'card', statusBadgeHtml)
+          : `<div class="relative h-48 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
+               <div class="flex flex-col items-center justify-center text-slate-300">
                  <span class="material-symbols-outlined text-5xl">image</span>
                  <span class="text-[11px] font-bold text-slate-400 mt-1">No image added</span>
-               </div>`
-          }
-          <div class="absolute top-4 right-4">
-            <span class="${statusClasses} font-label-sm text-label-sm py-1 px-3 rounded-full flex items-center gap-1 shadow-sm font-bold">
-              <span class="w-2 h-2 rounded-full bg-current opacity-70"></span> ${statusLabel}
-            </span>
-          </div>
-        </div>
+               </div>
+               ${statusBadgeHtml}
+             </div>`
+        }
         <div class="p-6 flex-1 flex flex-col">
           <h3 class="font-headline-sm text-headline-sm font-bold text-slate-900 mb-2">${proj.title}</h3>
           <p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">${proj.impact}</p>
@@ -7769,15 +7772,15 @@ if (statusDot) {
         <div class="p-6 md:p-8">
           <div class="flex flex-col lg:flex-row gap-8">
             <div class="lg:w-1/3">
-              <div class="aspect-square rounded-lg bg-surface-container-high overflow-hidden mb-4 flex items-center justify-center">
-                ${hasImage
-                  ? `<img class="w-full h-full object-cover" src="${proj.imageUrl}" alt="${proj.title}"/>`
-                  : `<div class="flex flex-col items-center justify-center text-slate-300">
+              ${hasImage
+                ? `<div class="mb-4">${this._coverFrameHtml(proj, 'profile')}</div>`
+                : `<div class="aspect-square rounded-lg bg-surface-container-high overflow-hidden mb-4 flex items-center justify-center">
+                     <div class="flex flex-col items-center justify-center text-slate-300">
                        <span class="material-symbols-outlined text-5xl">image</span>
                        <span class="text-[11px] font-bold text-slate-400 mt-1">No image added</span>
-                     </div>`
-                }
-              </div>
+                     </div>
+                   </div>`
+              }
               <h3 class="font-headline-sm text-primary font-bold mb-2">${proj.title}</h3>
               <p class="text-on-surface-variant font-body-md mb-4">${proj.role}</p>
               
@@ -7957,6 +7960,120 @@ if (statusDot) {
         }
       }
     }
+  }
+
+  /**
+   * Cover picture for a project card. Shows the WHOLE image whatever its shape
+   * (wide banner, tall poster, square) over a blurred copy of itself instead of
+   * cropping it, and opens the full-screen viewer when clicked.
+   * `overlayHtml` is extra markup (e.g. the status badge) layered on top.
+   */
+  _coverFrameHtml(proj, variant = 'card', overlayHtml = '') {
+    const src = this.escapeHtml(proj.imageUrl);
+    const alt = this.escapeHtml(proj.title);
+    return `
+      <div class="cover-frame cover-frame--${variant}">
+        <img class="cover-bg" src="${src}" alt="" aria-hidden="true" decoding="async"/>
+        <img class="cover-img" src="${src}" alt="${alt}" decoding="async"/>
+        <button type="button" class="cover-hit" data-src="${src}" data-alt="${alt}"
+          onclick="app.openImageViewer(this)" aria-label="View ${alt} full screen" title="View full screen">
+          <span class="cover-zoom-badge"><span class="material-symbols-outlined" aria-hidden="true">open_in_full</span></span>
+        </button>
+        ${overlayHtml}
+      </div>`;
+  }
+
+  /**
+   * Full-screen image viewer. Click the picture to toggle between "fit to
+   * screen" and actual size; Esc, the close button or a click on the dark
+   * backdrop closes it. The fullscreen button also asks the browser to hide its
+   * own chrome (hidden where the browser doesn't support that, e.g. iPhone).
+   */
+  openImageViewer(trigger) {
+    const src = trigger && trigger.dataset ? trigger.dataset.src : '';
+    if (!src) return;
+    const alt = (trigger.dataset.alt || '').trim() || 'Project image';
+    this.closeImageViewer();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'image-viewer';
+    overlay.className = 'img-viewer';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Image viewer');
+    const canBrowserFullscreen = !!(document.fullscreenEnabled && overlay.requestFullscreen);
+    overlay.innerHTML = `
+      <div class="img-viewer__bar">
+        <span class="img-viewer__title"></span>
+        <div class="img-viewer__actions">
+          <button type="button" class="img-viewer__btn" data-act="zoom" aria-label="Zoom to actual size" title="Zoom">
+            <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span></button>
+          ${canBrowserFullscreen ? `<button type="button" class="img-viewer__btn" data-act="fs" aria-label="Toggle full screen" title="Full screen">
+            <span class="material-symbols-outlined" aria-hidden="true">fullscreen</span></button>` : ''}
+          <button type="button" class="img-viewer__btn" data-act="close" aria-label="Close" title="Close (Esc)">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+      </div>
+      <div class="img-viewer__stage"><img class="img-viewer__img" alt=""/></div>`;
+    // Untrusted text goes in via the DOM, never through the HTML string.
+    overlay.querySelector('.img-viewer__title').textContent = alt;
+    const img = overlay.querySelector('.img-viewer__img');
+    img.src = src;
+    img.alt = alt;
+
+    const zoomBtn = overlay.querySelector('[data-act="zoom"]');
+    const toggleZoom = () => {
+      const zoomed = overlay.classList.toggle('is-zoomed');
+      zoomBtn.setAttribute('aria-label', zoomed ? 'Fit to screen' : 'Zoom to actual size');
+      zoomBtn.querySelector('.material-symbols-outlined').textContent = zoomed ? 'zoom_out' : 'zoom_in';
+    };
+    const toggleBrowserFullscreen = () => {
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else overlay.requestFullscreen();
+      } catch (e) { /* unsupported — the viewer already fills the page */ }
+    };
+
+    overlay.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]');
+      if (act) {
+        const a = act.getAttribute('data-act');
+        if (a === 'close') this.closeImageViewer();
+        else if (a === 'zoom') toggleZoom();
+        else if (a === 'fs') toggleBrowserFullscreen();
+        return;
+      }
+      if (e.target === img) { toggleZoom(); return; }
+      // Anywhere else (the dark backdrop) closes.
+      if (!e.target.closest('.img-viewer__bar')) this.closeImageViewer();
+    });
+
+    this._imageViewerKeydown = (e) => { if (e.key === 'Escape') this.closeImageViewer(); };
+    document.addEventListener('keydown', this._imageViewerKeydown);
+
+    this._imageViewerReturnFocus = trigger;
+    this._imageViewerPrevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(overlay);
+    const closeBtn = overlay.querySelector('[data-act="close"]');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  closeImageViewer() {
+    const overlay = document.getElementById('image-viewer');
+    if (!overlay) return;
+    if (document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (e) { /* ignore */ }
+    }
+    overlay.remove();
+    document.body.style.overflow = this._imageViewerPrevOverflow || '';
+    if (this._imageViewerKeydown) {
+      document.removeEventListener('keydown', this._imageViewerKeydown);
+      this._imageViewerKeydown = null;
+    }
+    const back = this._imageViewerReturnFocus;
+    this._imageViewerReturnFocus = null;
+    if (back && typeof back.focus === 'function' && document.contains(back)) back.focus();
   }
 
   handleProjectImageSelect(e) {

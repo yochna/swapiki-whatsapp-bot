@@ -189,7 +189,7 @@
        in parallel with the HTML instead of only after it parses. Execution
        order is still guaranteed by the defer tags below. -->
   <link rel="preload" as="script" href="/vendor/supabase.min.js?v=20260924x" />
-  <link rel="preload" as="script" href="/dist/js/app.js?v=20261026b" />
+  <link rel="preload" as="script" href="/dist/js/app.js?v=20261026c" />
 
   <!-- Google Identity Services (Sign In With Google) — the script itself is
        loaded dynamically by app.js ONLY on the production domain (swapiki.com).
@@ -3735,10 +3735,6 @@
       color: var(--d-accent);
     }
 
-    #view-dashboard .group:hover .group-hover\:scale-105 {
-      transform: scale(1.03);
-    }
-
     /* ---------- meters ---------- */
     #view-dashboard .bg-primary.h-full {
       background: var(--d-accent);
@@ -4238,6 +4234,29 @@
     .mobile-nav-link { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-weight: 700; font-size: 14px; color: #17130E; padding: 10px 12px; border-radius: 10px; }
     .mobile-nav-link .material-symbols-outlined { font-size: 18px; color: #D9481F; }
     .mobile-nav-link.is-active { background: #EFE9DE; box-shadow: inset 3px 0 0 #D9481F; }
+
+    /* ---- Project cover: shows the WHOLE image at any aspect ratio (no cropping), over a blurred copy of itself ---- */
+    .cover-frame { position: relative; width: 100%; min-height: 12rem; max-height: 26rem; overflow: hidden; background: #EFE9DE; display: flex; align-items: center; justify-content: center; }
+    .cover-frame--profile { max-height: 24rem; border-radius: 0.5rem; }
+    .cover-bg { position: absolute; inset: -24px; width: calc(100% + 48px); height: calc(100% + 48px); max-width: none; object-fit: cover; filter: blur(22px) saturate(1.15); opacity: .6; pointer-events: none; }
+    .cover-img { position: relative; display: block; width: 100%; height: auto; max-height: 26rem; object-fit: contain; }
+    .cover-frame--profile .cover-img { max-height: 24rem; }
+    .cover-hit { position: absolute; inset: 0; z-index: 1; background: transparent; border: 0; padding: 0; cursor: zoom-in; }
+    .cover-hit:focus-visible { outline: 3px solid #D9481F; outline-offset: -3px; }
+    .cover-zoom-badge { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9999px; background: rgba(23,19,14,.72); color: #F7F3EC; opacity: .85; transition: opacity .15s, transform .15s; }
+    .cover-zoom-badge .material-symbols-outlined { font-size: 18px; }
+    .cover-hit:hover .cover-zoom-badge, .cover-hit:focus-visible .cover-zoom-badge { opacity: 1; transform: scale(1.08); }
+
+    /* ---- Full-screen image viewer ---- */
+    .img-viewer { position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; background: rgba(23,19,14,.95); color: #F7F3EC; }
+    .img-viewer__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+    .img-viewer__title { font-size: 14px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .img-viewer__actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .img-viewer__btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 9999px; background: rgba(255,255,255,.1); color: #F7F3EC; border: 0; cursor: pointer; transition: background-color .15s; }
+    .img-viewer__btn:hover, .img-viewer__btn:focus-visible { background: rgba(255,255,255,.22); outline: none; }
+    .img-viewer__stage { flex: 1; min-height: 0; display: flex; overflow: auto; padding: 8px 16px 24px; }
+    .img-viewer__img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; border-radius: 6px; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+    .img-viewer.is-zoomed .img-viewer__img { max-width: none; max-height: none; cursor: zoom-out; }
   </style>
 
   <!-- ================= GLOBAL TOP NAVIGATION BAR ================= -->
@@ -6755,7 +6774,7 @@
    <script src="/dist/js/profileChecklist.js?v=20261014m" defer></script>
     <script src="/dist/js/profileMatch.js?v=20261001a" defer></script>
     <script src="/dist/js/githubMatch.js?v=20261001a" defer></script>
-    <script src="/dist/js/app.js?v=20261026b" defer></script>
+    <script src="/dist/js/app.js?v=20261026c" defer></script>
 </body>
 
 </html>
