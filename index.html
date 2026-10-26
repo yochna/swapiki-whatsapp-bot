@@ -1041,6 +1041,16 @@
       visibility: hidden;
     }
 
+    /* Safety net: the progress hairline, the cut flash and the skip button
+       belong to the intro only. Whatever the markup around them does, they
+       can never paint once the intro is over (this is the orange line that
+       used to sit on every page). */
+    body:not(.splash-active) .app-splash-progress,
+    body:not(.splash-active) .app-splash-burst,
+    body:not(.splash-active) .app-splash-skip {
+      display: none !important;
+    }
+
     /* The landing page fades up under the push-through. Opacity only: a
        transform here would make every position:fixed child of the view
        reposition itself against the section instead of the viewport. */
@@ -3844,7 +3854,6 @@
           <span class="app-splash-tagline">Real work, in your own voice</span>
           <span class="app-splash-tagline">A profile that speaks for you</span>
         </div>
-      </div>
     </div>
     <button type="button" class="app-splash-skip" id="app-splash-skip" aria-label="Skip the intro">Skip intro</button>
     <div class="app-splash-progress" aria-hidden="true"><div class="app-splash-progress-bar"></div></div>
