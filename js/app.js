@@ -9137,7 +9137,7 @@ if (statusDot) {
     }
 
     const rawExpertise = document.getElementById('edit-expertise').value;
-    const expertiseArr = rawExpertise ? rawExpertise.split(',').map(s => s.trim()).filter(s => s.length > 0) : ["Design Systems"];
+    const expertiseArr = rawExpertise ? rawExpertise.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
 
         const updateData = {
       name: document.getElementById('edit-name').value,

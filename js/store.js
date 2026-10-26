@@ -970,6 +970,50 @@ class SwapikiStore {
   }
 
   /**
+   * True when `value` is exactly what the shared demo profile (DEFAULT_PROFILE,
+   * "Ananya Sharma") holds for `field`.
+   */
+  _isDemoValue(field, value) {
+    const demo = DEFAULT_PROFILE[field];
+    if (this._isBlank(value) || this._isBlank(demo)) return false;
+    const norm = v => (Array.isArray(v) ? v.join(',') : String(v)).trim().toLowerCase();
+    return norm(value) === norm(demo);
+  }
+
+  /**
+   * Does this profile carry the demo candidate's data? Judged by the bio and
+   * LinkedIn URL, which nobody would ever type verbatim, rather than by fields
+   * like location or availability that a real candidate could legitimately
+   * share with the demo.
+   */
+  _hasDemoFingerprint(profile) {
+    if (!profile) return false;
+    return profile.id === DEFAULT_PROFILE.id
+      || profile.username === DEFAULT_PROFILE.username
+      || this._isDemoValue('bio', profile.bio)
+      || this._isDemoValue('linkedin', profile.linkedin);
+  }
+
+  /**
+   * Blanks demo values out of a real candidate's profile (in place). Heals
+   * accounts that were already contaminated: the cloud row and this browser
+   * both hold the demo headline, skills, location, bio and LinkedIn as if the
+   * candidate had typed them. The name is never touched - it is the real one.
+   */
+  _stripDemoValues(profile) {
+    if (!this._hasDemoFingerprint(profile)) return false;
+    let changed = false;
+    SwapikiStore.RECONCILED_FIELDS.forEach(f => {
+      if (f === 'name') return;
+      if (this._isDemoValue(f, profile[f])) {
+        profile[f] = Array.isArray(DEFAULT_PROFILE[f]) ? [] : '';
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
+  /**
    * Last-write-wins, with one deliberate exception.
    *
    * Taking the cloud row wholesale used to destroy anything the browser had but
@@ -1006,6 +1050,11 @@ class SwapikiStore {
     // filled back in from the browser rather than blanked.
     const merged = { ...cloud };
     let rescued = false;
+    // A fresh browser (or one that just signed someone out) holds the shared
+    // demo profile in memory. It is not this candidate's data, so it must never
+    // be "rescued" into a real account - that is how the demo headline, skills,
+    // location, bio and LinkedIn ended up pre-filled for brand-new sign-ups.
+    if (this._hasDemoFingerprint(local)) return merged;
     SwapikiStore.RECONCILED_FIELDS.forEach(f => {
       if (this._isBlank(merged[f]) && !this._isBlank(local[f])) {
         merged[f] = local[f];
@@ -1109,6 +1158,8 @@ class SwapikiStore {
 
     this.data.userId = user.id;
     if (!Array.isArray(this.data.projects)) this.data.projects = [];
+    // Accounts created before the guard above already hold the demo values.
+    this._stripDemoValues(this.data);
     this.saveData(this.data);
 
     // Tie PostHog's anonymous session to this real user, so "time spent"
