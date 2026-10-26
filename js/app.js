@@ -223,6 +223,17 @@ class Router {
       window.location.hash = viewId;
     }
 
+    // Highlight the matching nav link. Runs AFTER the guards above so a
+    // redirected view (e.g. guest -> landing) highlights what is really shown.
+    // Sub-pages light up the section they belong to.
+    const navGroup = { 'add-project': 'dashboard', 'resume-draft': 'jobs', 'interview-prep': 'jobs' }[viewId] || viewId;
+    document.querySelectorAll('[data-nav-view]').forEach(el => {
+      const on = el.getAttribute('data-nav-view') === navGroup;
+      el.classList.toggle('is-active', on);
+      if (on) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
+
     document.querySelectorAll('.view-section').forEach(sec => {
       sec.classList.remove('active-view');
     });
@@ -4524,6 +4535,23 @@ const hasUrl = !!applyTarget;
         </div>
       </div>`;
     document.body.appendChild(overlay);
+  }
+
+  /** Copies the candidate's proof-profile link shown in the job apply popup. */
+  copyMyJobProfileLink() {
+    const link = this._jobApplyLink || '';
+    if (!link) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => this.showToast('Proof link copied — send it to the job contact.'));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      this.showToast('Proof link copied — send it to the job contact.');
+    }
   }
 
   applyToJob(jobId) {
