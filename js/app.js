@@ -8329,16 +8329,25 @@ if (statusDot) {
           const progressBar = document.getElementById('audio-progress-bar');
           if (progressBar) progressBar.style.width = `${Math.min(100, (sec / 120) * 100)}%`;
 
-          // AI Teleprompter Step Controller
+          // On-screen prompt that follows the clock. The verification sentence
+          // only fills the first ~10s, so the candidate is told what to say next.
           if (sec < 30) {
-            if (teleprompterText) teleprompterText.textContent = "Step 1 (0–30s): State the core business/technical problem you solved.";
-            if (teleprompterBadge) teleprompterBadge.textContent = "0–30s Prompt";
-          } else if (sec < 90) {
-            if (teleprompterText) teleprompterText.textContent = "Step 2 (30–90s): Detail your exact contribution, architecture & trade-offs.";
-            if (teleprompterBadge) teleprompterBadge.textContent = "30–90s Prompt";
+            if (teleprompterText) teleprompterText.textContent = "Now say what the project is, who it is for and the problem it solves, then what you personally built.";
+            if (teleprompterBadge) teleprompterBadge.textContent = "Step 1 · Problem & your role";
+          } else if (sec < 75) {
+            if (teleprompterText) teleprompterText.textContent = "Explain how you built it: the tools you chose, one hard problem and the trade-off you made.";
+            if (teleprompterBadge) teleprompterBadge.textContent = "Step 2 · How you built it";
           } else {
-            if (teleprompterText) teleprompterText.textContent = "Step 3 (90–120s): Summarize measurable metric impact achieved.";
-            if (teleprompterBadge) teleprompterBadge.textContent = "90–120s Prompt";
+            if (teleprompterText) teleprompterText.textContent = "Finish with the result: numbers, users or what changed, and what you would improve next.";
+            if (teleprompterBadge) teleprompterBadge.textContent = "Step 3 · The result";
+          }
+
+          // Tell them how far they are from the minimum while they record, so
+          // the "too short" message on Save is never a surprise.
+          if (status) {
+            status.textContent = sec < 30
+              ? `Keep going — ${30 - sec}s until the 30-second minimum.`
+              : 'Minimum reached. Stop whenever you are done, or keep going up to 2:00.';
           }
         },
         (blobUrl, durationStr, isValid) => {
