@@ -26,6 +26,24 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
   "'": "&#39;"
 }[c]));
 
+// A stalled Supabase request must not stall the page itself: this lookup runs
+// in front of the HTML document, so without a bound a slow upstream is a blank
+// tab for the visitor. On timeout the fetch aborts and throws, which the
+// middleware already treats as "could not tell" and answers by serving the
+// plain SPA shell (the browser then loads the profile itself, with a retry).
+const LOOKUP_TIMEOUT_MS = 4000;
+
+async function fetchWithTimeout(url, init = {}, ms = LOOKUP_TIMEOUT_MS) {
+  if (typeof AbortController === "undefined") return fetch(url, init);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Fetches a candidate + their projects by username.
  *
@@ -47,9 +65,10 @@ export async function getProfileForHandle(handle, env = {}) {
   // not tell. It is thrown so the caller can fall through to the SPA without
   // ever marking a real profile's page noindex. Only an empty result set or a
   // draft returns null (a definitive "not a published profile").
-  const res = await fetch(candUrl, {
+  const timeoutMs = Number(env.LOOKUP_TIMEOUT_MS) > 0 ? Number(env.LOOKUP_TIMEOUT_MS) : LOOKUP_TIMEOUT_MS;
+  const res = await fetchWithTimeout(candUrl, {
     headers: { apikey: anonKey, Authorization: "Bearer " + anonKey }
-  });
+  }, timeoutMs);
   if (!res.ok) throw new Error("candidates lookup failed: " + res.status);
   const candRows = await res.json();
   if (!Array.isArray(candRows) || candRows.length === 0) return null;
@@ -62,9 +81,9 @@ export async function getProfileForHandle(handle, env = {}) {
     const projUrl = supabaseUrl +
       "/rest/v1/projects?candidate_id=eq." + encodeURIComponent(cand.id) +
       "&select=*&order=position.asc&limit=20";
-    const res = await fetch(projUrl, {
+    const res = await fetchWithTimeout(projUrl, {
       headers: { apikey: anonKey, Authorization: "Bearer " + anonKey }
-    });
+    }, timeoutMs);
     if (res.ok) {
       const rows = await res.json();
       if (Array.isArray(rows)) projects = rows;

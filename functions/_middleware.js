@@ -122,6 +122,16 @@ const isDeniedPath = (pathname) => {
   return false;
 };
 
+// Files the page loads after the HTML document: scripts, styles, images, fonts,
+// media. On a profile subdomain these MUST come straight from the Pages asset
+// store. The profile branch below answers every request with the HTML shell, so
+// without this exemption /dist/js/app.js came back as HTML, the browser threw
+// "Unexpected token '<'" on every script, and the candidate link sat on its
+// loading spinner forever. Feeds and documents (.xml, .json, .txt, .html) are
+// deliberately NOT listed, so they keep the behaviour they always had.
+const STATIC_ASSET_EXT = /\.(?:js|mjs|css|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|mp3|m4a|wav|mp4|webm)$/i;
+const isStaticAssetPath = (pathname) => STATIC_ASSET_EXT.test(pathname);
+
 const deniedHeaders = {
   'Content-Type': 'text/plain; charset=utf-8',
   'Cache-Control': 'no-store, max-age=0',
@@ -153,6 +163,10 @@ export async function onRequest(context) {
     if (sub && sub !== 'www') {
       if (pathname === '/robots.txt') {
         return new Response(ROBOTS_TXT, { status: 200, headers: robotsHeaders });
+      }
+      // Static files are never a profile page: let Pages serve the real file.
+      if (isStaticAssetPath(pathname)) {
+        return context.next();
       }
       const response = await profileResponse(request, env, sub);
       return response || context.next();

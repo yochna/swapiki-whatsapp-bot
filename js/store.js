@@ -470,6 +470,25 @@ class SwapikiStore {
       profileAttestedName: null,
     }
   }
+  /**
+   * Coerces a list-like column to a real array. A column that was written as
+   * text ("react, node") or JSON-as-string used to flow through `|| []` as a
+   * truthy string, and the first `.map()` on it threw - which, on the public
+   * profile page, left the visitor on a page that never finished rendering.
+   */
+  toList(value) {
+    if (Array.isArray(value)) return value.filter(v => v !== null && v !== undefined && v !== '');
+    if (typeof value === 'string') {
+      const t = value.trim();
+      if (!t) return [];
+      if (t[0] === '[') {
+        try { const parsed = JSON.parse(t); if (Array.isArray(parsed)) return this.toList(parsed); } catch (e) { /* fall through to split */ }
+      }
+      return t.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean);
+    }
+    return [];
+  }
+
   fromSupabaseRow(row) {
     return {
       id: row.id,
@@ -490,7 +509,7 @@ class SwapikiStore {
       resumeUrl: row.resume_url || null,
       education: row.education || "",
       status: row.status || "",
-      expertise: row.expertise || [],
+      expertise: this.toList(row.expertise),
       email: row.email || "",
       phone: row.phone || "",
       completionScore: row.completion_score ?? 30,
@@ -522,29 +541,60 @@ class SwapikiStore {
    * status, so this is just removing our own extra filter for that case,
    * not opening up anything the database wouldn't already allow.
    */
-  async getProfileByUsername(username, { includeUnpublished = false } = {}) {
-    if (!this.supabase || !username) return null;
-    console.log('[DEBUG] getProfileByUsername called with', { username, includeUnpublished });
+  /**
+   * Resolves `promise`, or rejects with Error(label) after `ms`. Supabase's
+   * query builder never times out on its own, so a stalled request would
+   * otherwise leave the caller (and the page) waiting forever.
+   */
+  _withTimeout(promise, ms, label) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(label || 'timeout')), ms);
+    });
+    return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+  }
+
+  async getProfileByUsername(username, { includeUnpublished = false, strict = false, timeoutMs = 15000 } = {}) {
+    // `strict` is for callers that must tell "no such profile" (null) apart
+    // from "we could not find out" (a thrown Error). The public profile page
+    // needs that: showing "Profile not found" for a dropped request is wrong,
+    // and showing nothing at all is worse.
+    if (!this.supabase || !username) {
+      if (strict && !this.supabase) throw new Error('backend_unavailable');
+      return null;
+    }
     try {
       let query = this.supabase.from('candidates').select('*').eq('username', username);
       if (!includeUnpublished) query = query.eq('profile_status', 'published');
       // Order newest-first and cap at 1 so a stray duplicate username never
       // trips maybeSingle's "multiple rows returned" and misreports the link
       // as "Profile not found" (a real failure mode we've hit before).
-      const { data: row, error } = await query.order('updated_at', { ascending: false }).limit(1).maybeSingle();
-      console.log('[DEBUG] getProfileByUsername result', { row, error });
-      if (error) console.warn('[DEBUG] getProfileByUsername Supabase error:', error);
+      const { data: row, error } = await this._withTimeout(
+        query.order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+        timeoutMs,
+        'profile_lookup_timeout'
+      );
+      if (error) {
+        console.warn('getProfileByUsername Supabase error:', error);
+        if (strict) throw new Error('profile_lookup_failed');
+      }
       if (!row) return null;
 
       const profile = { ...this.emptyProfileTemplate(), ...this.fromSupabaseRow(row) };
       profile.projects = [];
 
       try {
-        const { data: projectRows } = await this.supabase
-          .from('projects')
-          .select('*')
-          .eq('candidate_id', row.id)
-          .order('position', { ascending: true });
+        // Projects are secondary: if this one request stalls, the profile
+        // still renders (without them) instead of holding the whole page.
+        const { data: projectRows } = await this._withTimeout(
+          this.supabase
+            .from('projects')
+            .select('*')
+            .eq('candidate_id', row.id)
+            .order('position', { ascending: true }),
+          Math.min(timeoutMs, 8000),
+          'projects_lookup_timeout'
+        );
         if (Array.isArray(projectRows)) {
           profile.projects = projectRows.map(r => this.fromSupabaseProjectRow(r));
         }
@@ -552,7 +602,8 @@ class SwapikiStore {
 
       return profile;
     } catch (e) {
-      console.warn('[DEBUG] getProfileByUsername threw:', e);
+      console.warn('getProfileByUsername failed:', e && e.message);
+      if (strict) throw e;
       return null;
     }
   }
@@ -897,10 +948,10 @@ class SwapikiStore {
       title: row.title || "",
       role: row.role || "",
       impact: row.impact || "",
-      tags: row.tags || [],
+      tags: this.toList(row.tags),
       githubUrl: row.github_url || "",
       liveUrl: row.live_url || "",
-      takeaways: row.takeaways || [],
+      takeaways: this.toList(row.takeaways),
       audioUrl: row.audio_url || null,
       audioDuration: row.audio_duration || null,
       recordedAt: row.updated_at ? this.timeAgo(row.updated_at) : "Just now"
