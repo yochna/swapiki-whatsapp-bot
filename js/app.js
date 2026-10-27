@@ -223,6 +223,17 @@ class Router {
       window.location.hash = viewId;
     }
 
+    // Highlight the matching nav link. Runs AFTER the guards above so a
+    // redirected view (e.g. guest -> landing) highlights what is really shown.
+    // Sub-pages light up the section they belong to.
+    const navGroup = { 'add-project': 'dashboard', 'resume-draft': 'jobs', 'interview-prep': 'jobs' }[viewId] || viewId;
+    document.querySelectorAll('[data-nav-view]').forEach(el => {
+      const on = el.getAttribute('data-nav-view') === navGroup;
+      el.classList.toggle('is-active', on);
+      if (on) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
+
     document.querySelectorAll('.view-section').forEach(sec => {
       sec.classList.remove('active-view');
     });
@@ -322,7 +333,16 @@ class SwapikiApp {
       // Restore any existing Supabase session before routing, so a refresh
       // on /#dashboard doesn't bounce a logged-in candidate back to the
       // landing page.
-      await swapikiStore.getSession();
+      // Session restore can stall on a stuck auth lock; a candidate link must
+      // not wait on it forever, so give up after a few seconds and carry on as
+      // a signed-out visitor (the session still attaches if it arrives later).
+      let sessionTimer;
+      const sessionGiveUp = new Promise((resolve) => { sessionTimer = setTimeout(resolve, 2500); });
+      try {
+        await Promise.race([Promise.resolve(swapikiStore.getSession()).catch(() => {}), sessionGiveUp]);
+      } finally {
+        clearTimeout(sessionTimer);
+      }
       this.refreshAuthUI();
       try { this.maybeStartGuidedTour(); } catch (e) { /* ignore */ }
 
@@ -3297,14 +3317,71 @@ class SwapikiApp {
 
   /** Restore the normal candidate profile view after a 404 was shown. */
   clearNotFoundPanel() {
-    const panel = document.getElementById('candidate-not-found');
+    this._showCandidatePanel(null);
+  }
+
+  /**
+   * Shows exactly one of the candidate-link panels - 'loading', 'error' (the
+   * lookup failed) or 'notfound' (a clean "no such handle") - and hides the
+   * rest of the view behind it. Passing null clears them all and brings the
+   * profile content back. Hiding is done by class, explicitly, so a panel can
+   * never be left half-visible by an earlier state.
+   */
+  _showCandidatePanel(which) {
+    const ids = { loading: 'candidate-loading', error: 'candidate-load-error', notfound: 'candidate-not-found' };
+    const keys = Object.keys(ids);
+    const panels = {};
+    keys.forEach((k) => { panels[k] = document.getElementById(ids[k]); });
+    const active = which ? panels[which] : null;
+    keys.forEach((k) => {
+      if (!panels[k]) return;
+      if (panels[k] === active) panels[k].classList.remove('hidden');
+      else panels[k].classList.add('hidden');
+    });
     const main = document.querySelector('#view-candidate > main');
-    if (panel) panel.classList.add('hidden');
     if (main) {
+      const isPanel = (c) => keys.some((k) => panels[k] === c);
       [...main.children].forEach((child) => {
-        if (child !== panel) child.classList.remove('hidden');
+        if (isPanel(child)) return;
+        if (which) child.classList.add('hidden');
+        else child.classList.remove('hidden');
       });
     }
+  }
+
+  /** True on a candidate link: <handle>.swapiki.com (not the apex, not www). */
+  isCandidateHost() {
+    const host = (window.location && window.location.hostname) || '';
+    const APEX = 'swapiki.com';
+    if (!host.endsWith('.' + APEX)) return false;
+    const sub = host.slice(0, -(APEX.length + 1));
+    return !!sub && sub !== 'www';
+  }
+
+  /** The lookup itself failed (timeout, network, server): say so, with a retry - never a blank page or a false 404. */
+  _showCandidateLoadError(err) {
+    const msg = String((err && err.message) || err || '');
+    const reason = /timeout/i.test(msg)
+      ? 'This profile took too long to load.'
+      : 'Something went wrong while loading this profile.';
+    this._showCandidatePanel('error');
+    const handleEl = document.getElementById('candidate-load-error-handle');
+    if (handleEl) handleEl.textContent = `${this.publicUsername || ''}.swapiki.com`;
+    const reasonEl = document.getElementById('candidate-load-error-reason');
+    if (reasonEl) reasonEl.textContent = `${reason} Check your connection and try again.`;
+    this.setPageMeta('Could not load profile', 'This Swapiki profile could not be loaded right now. Please try again.');
+    console.warn('Candidate profile failed to load:', msg);
+  }
+
+  /** The error panel's "Try again" button: runs the lookup again without reloading the whole site. */
+  retryCandidateProfile() {
+    return this.renderCandidateProfile();
+  }
+
+  /** Only real web links are ever written to an href; javascript:, data: and the like are dropped. */
+  _safeHttpUrl(value) {
+    const v = String(value == null ? '' : value).trim();
+    return /^https?:\/\//i.test(v) ? v : '';
   }
 
   /**
@@ -4526,6 +4603,23 @@ const hasUrl = !!applyTarget;
         </div>
       </div>`;
     document.body.appendChild(overlay);
+  }
+
+  /** Copies the candidate's proof-profile link shown in the job apply popup. */
+  copyMyJobProfileLink() {
+    const link = this._jobApplyLink || '';
+    if (!link) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => this.showToast('Proof link copied — send it to the job contact.'));
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = link;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      this.showToast('Proof link copied — send it to the job contact.');
+    }
   }
 
   applyToJob(jobId) {
@@ -7152,23 +7246,26 @@ if (statusDot) {
         ? 'bg-on-tertiary-container text-tertiary-container'
         : (profile.profileStatus === 'suspended' ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700');
 
+      const statusBadgeHtml = `
+        <div class="absolute top-4 right-4" style="z-index:2;pointer-events:none">
+          <span class="${statusClasses} font-label-sm text-label-sm py-1 px-3 rounded-full flex items-center gap-1 shadow-sm font-bold">
+            <span class="w-2 h-2 rounded-full bg-current opacity-70"></span> ${statusLabel}
+          </span>
+        </div>`;
+
       const card = document.createElement('div');
       card.className = "bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col bento-card group";
       card.innerHTML = `
-        <div class="relative h-48 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
-          ${hasImage
-            ? `<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="${proj.imageUrl}" alt="${proj.title}"/>`
-            : `<div class="flex flex-col items-center justify-center text-slate-300">
+        ${hasImage
+          ? this._coverFrameHtml(proj, 'card', statusBadgeHtml)
+          : `<div class="relative h-48 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
+               <div class="flex flex-col items-center justify-center text-slate-300">
                  <span class="material-symbols-outlined text-5xl">image</span>
                  <span class="text-[11px] font-bold text-slate-400 mt-1">No image added</span>
-               </div>`
-          }
-          <div class="absolute top-4 right-4">
-            <span class="${statusClasses} font-label-sm text-label-sm py-1 px-3 rounded-full flex items-center gap-1 shadow-sm font-bold">
-              <span class="w-2 h-2 rounded-full bg-current opacity-70"></span> ${statusLabel}
-            </span>
-          </div>
-        </div>
+               </div>
+               ${statusBadgeHtml}
+             </div>`
+        }
         <div class="p-6 flex-1 flex flex-col">
           <h3 class="font-headline-sm text-headline-sm font-bold text-slate-900 mb-2">${proj.title}</h3>
           <p class="font-body-md text-body-md text-on-surface-variant line-clamp-2 mb-4">${proj.impact}</p>
@@ -7574,22 +7671,23 @@ if (statusDot) {
       // a candidate's <username>.swapiki.com link should work as soon as the
       // candidate exists, whether they've hit "Publish" yet or not — not
       // just for admin previews.
-      profile = await swapikiStore.getProfileByUsername(this.publicUsername, { includeUnpublished: true });
+      // Show "Loading profile" at once, so a visitor never sits looking at the
+      // built-in demo template (or nothing) while the lookup is in flight.
+      this._showCandidatePanel('loading');
+      try {
+        // strict: a FAILED lookup (timeout, network, server) throws, so it can
+        // be told apart from a handle that genuinely does not exist (null).
+        profile = await swapikiStore.getProfileByUsername(this.publicUsername, { includeUnpublished: true, strict: true });
+      } catch (err) {
+        this._showCandidateLoadError(err);
+        return;
+      }
       if (!profile) {
         // Proper 404: keep the URL, show a clean "profile not found" panel
         // instead of silently redirecting away from the broken link.
-        const panel = document.getElementById('candidate-not-found');
-        if (panel) {
-          const handleEl = document.getElementById('candidate-not-found-handle');
-          if (handleEl) handleEl.textContent = `${this.publicUsername}.swapiki.com`;
-          panel.classList.remove('hidden');
-        }
-        const main = document.querySelector('#view-candidate > main');
-        if (main) {
-          [...main.children].forEach((child) => {
-            if (child !== panel) child.classList.add('hidden');
-          });
-        }
+        const handleEl = document.getElementById('candidate-not-found-handle');
+        if (handleEl) handleEl.textContent = `${this.publicUsername}.swapiki.com`;
+        this._showCandidatePanel('notfound');
         this.showNotFoundToast(this.publicUsername);
         this.setPageMeta('Profile not found', 'This Swapiki profile could not be found or is not published yet.');
         return;
@@ -7605,6 +7703,10 @@ if (statusDot) {
     // Draft profiles are intentionally visible to public visitors too during
     // this pilot (not just published ones) — see the includeUnpublished
     // fetch above. There is deliberately no publish-status gate here.
+
+    // The profile on screen. The play button must read THIS, not the viewer's
+    // own cached profile, or a stranger pressing play hears the demo narration.
+    this._viewedProfile = profile;
 
     const username = this.publicUsername || profile.username || profile.id || 'ananya-sharma';
 
@@ -7673,8 +7775,9 @@ if (statusDot) {
 
     const linkedinLink = document.getElementById('rec-linkedin-link');
     if (linkedinLink) {
-      if (profile.linkedin) {
-        linkedinLink.href = profile.linkedin;
+      const safeLinkedin = this._safeHttpUrl(profile.linkedin);
+      if (safeLinkedin) {
+        linkedinLink.href = safeLinkedin;
         linkedinLink.classList.remove('hidden');
       } else {
         linkedinLink.classList.add('hidden');
@@ -7682,17 +7785,20 @@ if (statusDot) {
     }
         const twitterLink = document.getElementById('rec-twitter-link');
     if (twitterLink) {
-      if (profile.twitter) { twitterLink.href = profile.twitter; twitterLink.classList.remove('hidden'); }
+      const safeTwitter = this._safeHttpUrl(profile.twitter);
+      if (safeTwitter) { twitterLink.href = safeTwitter; twitterLink.classList.remove('hidden'); }
       else twitterLink.classList.add('hidden');
     }
     const portfolioLink = document.getElementById('rec-portfolio-link');
     if (portfolioLink) {
-      if (profile.portfolio) { portfolioLink.href = profile.portfolio; portfolioLink.classList.remove('hidden'); }
+      const safePortfolio = this._safeHttpUrl(profile.portfolio);
+      if (safePortfolio) { portfolioLink.href = safePortfolio; portfolioLink.classList.remove('hidden'); }
       else portfolioLink.classList.add('hidden');
     }
     const resumeLinkEl = document.getElementById('rec-resume-link');
     if (resumeLinkEl) {
-      if (profile.resumeLink) { resumeLinkEl.href = profile.resumeLink; resumeLinkEl.classList.remove('hidden'); }
+      const safeResume = this._safeHttpUrl(profile.resumeLink);
+      if (safeResume) { resumeLinkEl.href = safeResume; resumeLinkEl.classList.remove('hidden'); }
       else resumeLinkEl.classList.add('hidden');
     }
 
@@ -7706,15 +7812,16 @@ if (statusDot) {
     if (aboutBio) aboutBio.textContent = profile.bio || `${firstName} hasn't added a bio yet.`;
     if (aboutLocation) aboutLocation.textContent = profile.location || 'Not specified';
 
+    const projects = Array.isArray(profile.projects) ? profile.projects : [];
     const projectsCountEl = document.getElementById('rec-projects-count');
-    if (projectsCountEl) projectsCountEl.textContent = String(profile.projects.length);
+    if (projectsCountEl) projectsCountEl.textContent = String(projects.length);
 
     const container = document.getElementById('stitch-candidate-projects-container');
     if (!container) return;
 
     container.innerHTML = '';
 
-    if (!profile.projects || profile.projects.length === 0) {
+    if (projects.length === 0) {
       container.innerHTML = `
         <div class="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center">
           <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">folder_open</span>
@@ -7723,9 +7830,20 @@ if (statusDot) {
         </div>
       `;
     } else {
-      profile.projects.forEach((proj, idx) => {
+      // Everything below comes from a database row a candidate typed into, so it
+      // is escaped, list columns are normalised, and each row is built in its own
+      // try/catch: one malformed project can never blank the rest of the page.
+      const esc = (v) => this.escapeHtml(v);
+      const asList = (v) => (swapikiStore && typeof swapikiStore.toList === 'function'
+        ? swapikiStore.toList(v) : (Array.isArray(v) ? v : []));
+      projects.forEach((proj, idx) => {
+      try {
+      const tags = asList(proj.tags);
+      const takeaways = asList(proj.takeaways);
+      const safeId = String(proj.id == null ? '' : proj.id).replace(/[^A-Za-z0-9_-]/g, '');
+      const repoUrl = this._safeHttpUrl(proj.githubUrl);
       const hasImage = !!proj.imageUrl;
-      const isLast = idx === profile.projects.length - 1;
+      const isLast = idx === projects.length - 1;
 
       const row = document.createElement('div');
       row.className = "relative flex gap-4 md:gap-5 proof-entry";
@@ -7743,21 +7861,21 @@ if (statusDot) {
         <div class="p-6 md:p-8">
           <div class="flex flex-col lg:flex-row gap-8">
             <div class="lg:w-1/3">
-              <div class="aspect-square rounded-lg bg-surface-container-high overflow-hidden mb-4 flex items-center justify-center">
-                ${hasImage
-                  ? `<img class="w-full h-full object-cover" src="${proj.imageUrl}" alt="${proj.title}"/>`
-                  : `<div class="flex flex-col items-center justify-center text-slate-300">
+              ${hasImage
+                ? `<div class="mb-4">${this._coverFrameHtml(proj, 'profile')}</div>`
+                : `<div class="aspect-square rounded-lg bg-surface-container-high overflow-hidden mb-4 flex items-center justify-center">
+                     <div class="flex flex-col items-center justify-center text-slate-300">
                        <span class="material-symbols-outlined text-5xl">image</span>
                        <span class="text-[11px] font-bold text-slate-400 mt-1">No image added</span>
-                     </div>`
-                }
-              </div>
-              <h3 class="font-headline-sm text-primary font-bold mb-2">${proj.title}</h3>
-              <p class="text-on-surface-variant font-body-md mb-4">${proj.role}</p>
+                     </div>
+                   </div>`
+              }
+              <h3 class="font-headline-sm text-primary font-bold mb-2">${esc(proj.title)}</h3>
+              <p class="text-on-surface-variant font-body-md mb-4">${esc(proj.role)}</p>
               
               <!-- Module 4: GitHub Repository Proof Component -->
               ${(() => {
-                const hasValidRepo = proj.githubUrl && (proj.githubUrl.startsWith('http://') || proj.githubUrl.startsWith('https://'));
+                const hasValidRepo = !!repoUrl;
                 if (!hasValidRepo) {
                   return `
                     <div class="mb-4 p-3 bg-slate-100 text-slate-700 rounded-xl text-xs space-y-1 border border-slate-200">
@@ -7778,7 +7896,7 @@ if (statusDot) {
                       <span class="bg-slate-700 text-slate-200 text-[10px] font-bold px-2 py-0.5 rounded">Candidate-submitted</span>
                     </div>
                     <p class="text-[11px] text-slate-400 leading-relaxed">Link added by the candidate. Swapiki has not reviewed the code or confirmed the project is theirs.</p>
-                    <a href="${proj.githubUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
+                    <a href="${esc(repoUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-bold text-emerald-300 hover:text-emerald-200">
                       Inspect Public Code Base &rarr;
                     </a>
                   </div>
@@ -7786,7 +7904,7 @@ if (statusDot) {
               })()}
 
               <div class="flex flex-wrap gap-2">
-                ${proj.tags.map(t => `<span class="px-2 py-1 bg-surface-container text-on-surface-variant rounded font-label-sm font-semibold">${t}</span>`).join('')}
+                ${tags.map(t => `<span class="px-2 py-1 bg-surface-container text-on-surface-variant rounded font-label-sm font-semibold">${esc(t)}</span>`).join('')}
               </div>
             </div>
             <div class="lg:w-2/3 space-y-6">
@@ -7796,15 +7914,15 @@ if (statusDot) {
                     <span class="w-2.5 h-2.5 rounded-full bg-tertiary-fixed animate-ping"></span>
                     <span class="text-xs font-extrabold tracking-wider uppercase text-tertiary-fixed">${proj.audioUrl ? 'CANDIDATE VOICE WALKTHROUGH' : 'AI-GENERATED PRODUCT DEMO VOICE'}</span>
                   </div>
-                  <span class="bg-white/10 text-white/90 text-xs px-2.5 py-1 rounded-full font-mono font-bold">${proj.audioDuration || '01:45'}</span>
+                  <span class="bg-white/10 text-white/90 text-xs px-2.5 py-1 rounded-full font-mono font-bold">${esc(proj.audioDuration || '01:45')}</span>
                 </div>
                 <div class="flex items-center gap-5">
-                  <button onclick="app.playProjectAudio('${proj.id}')" class="w-14 h-14 rounded-full bg-white text-primary flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all shrink-0">
-                    <span id="play-icon-${proj.id}" class="material-symbols-outlined text-3xl font-extrabold">play_arrow</span>
+                  <button onclick="app.playProjectAudio('${safeId}')" class="w-14 h-14 rounded-full bg-white text-primary flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all shrink-0">
+                    <span id="play-icon-${safeId}" class="material-symbols-outlined text-3xl font-extrabold">play_arrow</span>
                   </button>
                   <div class="flex-1">
                     <p class="text-xs font-bold text-blue-100 mb-2">${proj.audioUrl ? 'Candidate recording: impact & technical logic' : 'Product demo narration, not a candidate recording'}</p>
-                    <div class="audio-wave-anim flex-1 justify-between px-1 cursor-pointer" onclick="app.playProjectAudio('${proj.id}')">
+                    <div class="audio-wave-anim flex-1 justify-between px-1 cursor-pointer" onclick="app.playProjectAudio('${safeId}')">
                       <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
                       <div class="wave-bar bg-white" style="animation-delay: 0.3s"></div>
                       <div class="wave-bar bg-white" style="animation-delay: 0.5s"></div>
@@ -7824,11 +7942,11 @@ if (statusDot) {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <h4 class="font-label-sm text-outline uppercase mb-2 tracking-widest font-bold">THE PROBLEM</h4>
-                  <p class="font-body-md text-on-surface">${proj.takeaways[0] || 'Overcoming fragmented workflows and high cognitive load.'}</p>
+                  <p class="font-body-md text-on-surface">${esc(takeaways[0] || 'Overcoming fragmented workflows and high cognitive load.')}</p>
                 </div>
                 <div>
                   <h4 class="font-label-sm text-outline uppercase mb-2 tracking-widest font-bold">MY IMPACT</h4>
-                  <p class="font-body-md text-primary font-bold">${proj.impact}</p>
+                  <p class="font-body-md text-primary font-bold">${esc(proj.impact)}</p>
                 </div>
               </div>
             </div>
@@ -7837,6 +7955,9 @@ if (statusDot) {
         </article>
       `;
       container.appendChild(row);
+      } catch (rowErr) {
+        console.warn('Skipped a project that could not be rendered:', rowErr && rowErr.message);
+      }
       });
     }
   }
@@ -7845,8 +7966,15 @@ if (statusDot) {
     const icon = document.getElementById(`play-icon-${projectId}`);
     // Find the wave container closest to this play button's project card
     const waveContainer = icon ? icon.closest('.bg-gradient-to-r')?.querySelector('.audio-wave-anim') : null;
-    const profile = swapikiStore.getProfile();
-    const project = profile.projects.find(p => p.id === projectId);
+    // Look in the profile that is ON SCREEN first (a stranger on a candidate link
+    // has a different, local profile cached), then fall back to the viewer's own.
+    const viewed = this._viewedProfile;
+    let profile = viewed;
+    let project = viewed && Array.isArray(viewed.projects) ? viewed.projects.find(p => p.id === projectId) : null;
+    if (!project) {
+      profile = swapikiStore.getProfile();
+      project = (profile.projects || []).find(p => p.id === projectId);
+    }
 
     const setWavePlaying = (playing) => {
       if (waveContainer) {
@@ -7931,6 +8059,120 @@ if (statusDot) {
         }
       }
     }
+  }
+
+  /**
+   * Cover picture for a project card. Shows the WHOLE image whatever its shape
+   * (wide banner, tall poster, square) over a blurred copy of itself instead of
+   * cropping it, and opens the full-screen viewer when clicked.
+   * `overlayHtml` is extra markup (e.g. the status badge) layered on top.
+   */
+  _coverFrameHtml(proj, variant = 'card', overlayHtml = '') {
+    const src = this.escapeHtml(proj.imageUrl);
+    const alt = this.escapeHtml(proj.title);
+    return `
+      <div class="cover-frame cover-frame--${variant}">
+        <img class="cover-bg" src="${src}" alt="" aria-hidden="true" decoding="async"/>
+        <img class="cover-img" src="${src}" alt="${alt}" decoding="async"/>
+        <button type="button" class="cover-hit" data-src="${src}" data-alt="${alt}"
+          onclick="app.openImageViewer(this)" aria-label="View ${alt} full screen" title="View full screen">
+          <span class="cover-zoom-badge"><span class="material-symbols-outlined" aria-hidden="true">open_in_full</span></span>
+        </button>
+        ${overlayHtml}
+      </div>`;
+  }
+
+  /**
+   * Full-screen image viewer. Click the picture to toggle between "fit to
+   * screen" and actual size; Esc, the close button or a click on the dark
+   * backdrop closes it. The fullscreen button also asks the browser to hide its
+   * own chrome (hidden where the browser doesn't support that, e.g. iPhone).
+   */
+  openImageViewer(trigger) {
+    const src = trigger && trigger.dataset ? trigger.dataset.src : '';
+    if (!src) return;
+    const alt = (trigger.dataset.alt || '').trim() || 'Project image';
+    this.closeImageViewer();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'image-viewer';
+    overlay.className = 'img-viewer';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Image viewer');
+    const canBrowserFullscreen = !!(document.fullscreenEnabled && overlay.requestFullscreen);
+    overlay.innerHTML = `
+      <div class="img-viewer__bar">
+        <span class="img-viewer__title"></span>
+        <div class="img-viewer__actions">
+          <button type="button" class="img-viewer__btn" data-act="zoom" aria-label="Zoom to actual size" title="Zoom">
+            <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span></button>
+          ${canBrowserFullscreen ? `<button type="button" class="img-viewer__btn" data-act="fs" aria-label="Toggle full screen" title="Full screen">
+            <span class="material-symbols-outlined" aria-hidden="true">fullscreen</span></button>` : ''}
+          <button type="button" class="img-viewer__btn" data-act="close" aria-label="Close" title="Close (Esc)">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span></button>
+        </div>
+      </div>
+      <div class="img-viewer__stage"><img class="img-viewer__img" alt=""/></div>`;
+    // Untrusted text goes in via the DOM, never through the HTML string.
+    overlay.querySelector('.img-viewer__title').textContent = alt;
+    const img = overlay.querySelector('.img-viewer__img');
+    img.src = src;
+    img.alt = alt;
+
+    const zoomBtn = overlay.querySelector('[data-act="zoom"]');
+    const toggleZoom = () => {
+      const zoomed = overlay.classList.toggle('is-zoomed');
+      zoomBtn.setAttribute('aria-label', zoomed ? 'Fit to screen' : 'Zoom to actual size');
+      zoomBtn.querySelector('.material-symbols-outlined').textContent = zoomed ? 'zoom_out' : 'zoom_in';
+    };
+    const toggleBrowserFullscreen = () => {
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else overlay.requestFullscreen();
+      } catch (e) { /* unsupported — the viewer already fills the page */ }
+    };
+
+    overlay.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]');
+      if (act) {
+        const a = act.getAttribute('data-act');
+        if (a === 'close') this.closeImageViewer();
+        else if (a === 'zoom') toggleZoom();
+        else if (a === 'fs') toggleBrowserFullscreen();
+        return;
+      }
+      if (e.target === img) { toggleZoom(); return; }
+      // Anywhere else (the dark backdrop) closes.
+      if (!e.target.closest('.img-viewer__bar')) this.closeImageViewer();
+    });
+
+    this._imageViewerKeydown = (e) => { if (e.key === 'Escape') this.closeImageViewer(); };
+    document.addEventListener('keydown', this._imageViewerKeydown);
+
+    this._imageViewerReturnFocus = trigger;
+    this._imageViewerPrevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.body.appendChild(overlay);
+    const closeBtn = overlay.querySelector('[data-act="close"]');
+    if (closeBtn) closeBtn.focus();
+  }
+
+  closeImageViewer() {
+    const overlay = document.getElementById('image-viewer');
+    if (!overlay) return;
+    if (document.fullscreenElement) {
+      try { document.exitFullscreen(); } catch (e) { /* ignore */ }
+    }
+    overlay.remove();
+    document.body.style.overflow = this._imageViewerPrevOverflow || '';
+    if (this._imageViewerKeydown) {
+      document.removeEventListener('keydown', this._imageViewerKeydown);
+      this._imageViewerKeydown = null;
+    }
+    const back = this._imageViewerReturnFocus;
+    this._imageViewerReturnFocus = null;
+    if (back && typeof back.focus === 'function' && document.contains(back)) back.focus();
   }
 
   handleProjectImageSelect(e) {
