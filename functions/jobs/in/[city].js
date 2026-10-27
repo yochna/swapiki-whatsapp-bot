@@ -47,16 +47,16 @@ const jobCard = (j) => {
   const applyUrl = safeApplyUrl(j.apply_url);
   const href = `/jobs/${jobSlug(j)}`;
   return `
-      <div style="border:1px solid #E2E8F0;border-radius:14px;padding:16px 18px;margin-bottom:12px;background:#fff;">
-        <a href="${esc(href)}" style="font-weight:700;font-size:16px;color:#0F172A;text-decoration:none;">${esc(j.title || "Open role")}</a>
-        <div style="font-size:13px;color:#475569;margin:3px 0 8px;">${esc(j.company || "")}${j.location ? " &middot; " + esc(j.location) : ""}</div>
+      <div style="border:1px solid #E1D9CB;border-radius:14px;padding:16px 18px;margin-bottom:12px;background:#fff;">
+        <a href="${esc(href)}" style="font-weight:700;font-size:16px;color:#17130E;text-decoration:none;">${esc(j.title || "Open role")}</a>
+        <div style="font-size:13px;color:#5A5046;margin:3px 0 8px;">${esc(j.company || "")}${j.location ? " &middot; " + esc(j.location) : ""}</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <span style="font-size:11px;font-weight:700;background:#E0E7FF;color:#1E3A8A;padding:4px 10px;border-radius:999px;border:1px solid #C7D2FE;">${esc(String(j.category || "any").toUpperCase())}</span>
-          ${j.salary ? `<span style="font-size:12px;color:#64748B;">${esc(j.salary)}</span>` : ""}
+          <span style="font-size:11px;font-weight:700;background:#FBEDE6;color:#B9491F;padding:4px 10px;border-radius:999px;border:1px solid #F7DFD2;">${esc(String(j.category || "any").toUpperCase())}</span>
+          ${j.salary ? `<span style="font-size:12px;color:#6B6156;">${esc(j.salary)}</span>` : ""}
           ${
             applyUrl
               ? `<a href="${esc(applyUrl)}" target="_blank" rel="noopener noreferrer nofollow"
-                   style="margin-left:auto;font-size:12px;font-weight:700;color:#1E3A8A;text-decoration:none;border:1px solid #C7D2FE;background:#EEF2FF;padding:6px 14px;border-radius:999px;">Apply &rarr;</a>`
+                   style="margin-left:auto;font-size:12px;font-weight:700;color:#B9491F;text-decoration:none;border:1px solid #F7DFD2;background:#FBEDE6;padding:6px 14px;border-radius:999px;">Apply &rarr;</a>`
               : ""
           }
         </div>
@@ -125,14 +125,14 @@ const shell = (city, title, description, canonical, jsonLd, bodyHtml) => `<!DOCT
 <meta name="twitter:image" content="${SITE}/assets/og-image.png"/>
 ${jsonLd}
 </head>
-<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#0F172A;">
+<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F7F3EC;color:#17130E;">
   <div style="max-width:760px;margin:0 auto;padding:28px 20px 72px;">
     <a href="/" style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;">
-      <span style="font-weight:800;font-size:20px;color:#1E3A8A;">Swapiki</span>
+      <span style="font-weight:800;font-size:20px;color:#17130E;">Swapiki</span>
     </a>
-    <nav aria-label="Breadcrumb" style="font-size:12px;color:#64748B;margin:22px 0 0;">
-      <a href="/" style="color:#1E3A8A;">Home</a>
-      <span aria-hidden="true"> / </span><a href="/jobs" style="color:#1E3A8A;">Jobs in India</a>
+    <nav aria-label="Breadcrumb" style="font-size:12px;color:#6B6156;margin:22px 0 0;">
+      <a href="/" style="color:#B9491F;">Home</a>
+      <span aria-hidden="true"> / </span><a href="/jobs" style="color:#B9491F;">Jobs in India</a>
       <span aria-hidden="true"> / </span>Jobs in ${esc(city.name)}
     </nav>
 ${bodyHtml}
@@ -142,11 +142,11 @@ ${bodyHtml}
 
 /** A hub with no service key is a misconfiguration, not "no jobs in this city". */
 const unavailableBody = (city) => `
-    <h1 style="font-size:30px;line-height:1.22;margin:22px 0 8px;color:#0F172A;">Jobs in ${esc(city.name)}</h1>
-    <p style="font-size:15px;line-height:1.7;color:#334155;">
+    <h1 style="font-size:30px;line-height:1.22;margin:22px 0 8px;color:#17130E;">Jobs in ${esc(city.name)}</h1>
+    <p style="font-size:15px;line-height:1.7;color:#2E2820;">
       The live list of ${esc(city.name)} openings is loading. The full board is always available.
     </p>
-    <p style="margin:20px 0 0;"><a href="/jobs" style="display:inline-block;background:#1E3A8A;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none;">Browse all jobs in India</a></p>`;
+    <p style="margin:20px 0 0;"><a href="/jobs" style="display:inline-block;background:#E85D2A;color:#17130E;font-weight:700;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none;">Browse all jobs in India</a></p>`;
 
 const notFound = (msg) =>
   `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Jobs in that city | Swapiki</title>` +
@@ -256,14 +256,14 @@ export async function onRequestGet(context) {
   )}</script>`;
 
   const synonymLine = city.synonyms.length
-    ? `<p style="font-size:14px;color:#64748B;margin:0 0 20px;">Also listed as ${city.synonyms.map((s) => esc(s)).join(", ")} &mdash; the two names are the same hiring market.</p>`
+    ? `<p style="font-size:14px;color:#6B6156;margin:0 0 20px;">Also listed as ${city.synonyms.map((s) => esc(s)).join(", ")} &mdash; the two names are the same hiring market.</p>`
     : "";
 
   const lede =
-    `<h1 style="font-size:30px;line-height:1.22;margin:22px 0 6px;color:#0F172A;">Jobs in ${esc(city.name)}</h1>` +
-    `<p style="font-size:16px;line-height:1.6;color:#334155;margin:0 0 4px;"><strong>${fmtCount(n)} open roles</strong> in ${esc(city.name)} on the Swapiki jobs board right now.</p>` +
+    `<h1 style="font-size:30px;line-height:1.22;margin:22px 0 6px;color:#17130E;">Jobs in ${esc(city.name)}</h1>` +
+    `<p style="font-size:16px;line-height:1.6;color:#2E2820;margin:0 0 4px;"><strong>${fmtCount(n)} open roles</strong> in ${esc(city.name)} on the Swapiki jobs board right now.</p>` +
     synonymLine +
-    `<p style="font-size:15px;line-height:1.7;color:#475569;max-width:640px;margin:0 0 26px;">
+    `<p style="font-size:15px;line-height:1.7;color:#5A5046;max-width:640px;margin:0 0 26px;">
        Every listing below is a live opening. Open a role to read the full description and use its
        Apply link, or search the whole board with filters and match scoring.
        Candidates apply with a proof-backed profile &mdash; real projects plus a 2-minute voice
@@ -273,47 +273,47 @@ export async function onRequestGet(context) {
   const list =
     shown.map(jobCard).join("") +
     (n > shown.length
-      ? `<p style="font-size:13px;color:#64748B;margin-top:18px;">Showing the first ${shown.length} of ${fmtCount(n)} openings in ${esc(city.name)}. <a href="/jobs" style="color:#1E3A8A;font-weight:700;text-decoration:none;">Open the full board</a> to search them all.</p>`
-      : `<p style="font-size:13px;color:#64748B;margin-top:18px;">That is every opening currently listed for ${esc(city.name)}. <a href="/jobs" style="color:#1E3A8A;font-weight:700;text-decoration:none;">Open the full board</a> to search all roles in India.</p>`);
+      ? `<p style="font-size:13px;color:#6B6156;margin-top:18px;">Showing the first ${shown.length} of ${fmtCount(n)} openings in ${esc(city.name)}. <a href="/jobs" style="color:#B9491F;font-weight:700;text-decoration:none;">Open the full board</a> to search them all.</p>`
+      : `<p style="font-size:13px;color:#6B6156;margin-top:18px;">That is every opening currently listed for ${esc(city.name)}. <a href="/jobs" style="color:#B9491F;font-weight:700;text-decoration:none;">Open the full board</a> to search all roles in India.</p>`);
 
   const faqHtml = `
-    <section style="margin-top:44px;border-top:1px solid #E2E8F0;padding-top:26px;">
-      <h2 style="font-size:19px;margin:0 0 16px;color:#0F172A;">Jobs in ${esc(city.name)} — questions</h2>
+    <section style="margin-top:44px;border-top:1px solid #E1D9CB;padding-top:26px;">
+      <h2 style="font-size:19px;margin:0 0 16px;color:#17130E;">Jobs in ${esc(city.name)} — questions</h2>
       ${faqPairs
         .map(
-          ([q, a]) => `<h3 style="font-size:16px;font-weight:700;margin:18px 0 4px;color:#0F172A;">${esc(q)}</h3>
-      <p style="font-size:15px;line-height:1.7;color:#334155;margin:0;">${esc(a)}</p>`
+          ([q, a]) => `<h3 style="font-size:16px;font-weight:700;margin:18px 0 4px;color:#17130E;">${esc(q)}</h3>
+      <p style="font-size:15px;line-height:1.7;color:#2E2820;margin:0;">${esc(a)}</p>`
         )
         .join("")}
     </section>`;
 
   const hubsHtml = `
-    <section style="margin-top:44px;border-top:1px solid #E2E8F0;padding-top:26px;">
-      <h2 style="font-size:19px;margin:0 0 14px;color:#0F172A;">Job hubs in other Indian cities</h2>
+    <section style="margin-top:44px;border-top:1px solid #E1D9CB;padding-top:26px;">
+      <h2 style="font-size:19px;margin:0 0 14px;color:#17130E;">Job hubs in other Indian cities</h2>
       <ul style="list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px;">
         ${others
           .map(
-            (c) => `<li><a href="/jobs/in/${esc(c.slug)}" style="display:inline-block;font-size:13px;font-weight:600;color:#1E3A8A;text-decoration:none;border:1px solid #C7D2FE;background:#EEF2FF;padding:6px 14px;border-radius:999px;">Jobs in ${esc(c.name)}</a></li>`
+            (c) => `<li><a href="/jobs/in/${esc(c.slug)}" style="display:inline-block;font-size:13px;font-weight:600;color:#B9491F;text-decoration:none;border:1px solid #F7DFD2;background:#FBEDE6;padding:6px 14px;border-radius:999px;">Jobs in ${esc(c.name)}</a></li>`
           )
           .join("")}
       </ul>
     </section>`;
 
   const cta = `
-    <section style="margin-top:44px;background:#0B1E45;border-radius:16px;padding:26px 24px;">
+    <section style="margin-top:44px;background:#17130E;border-radius:16px;padding:26px 24px;">
       <h2 style="font-size:19px;margin:0 0 8px;color:#fff;">Hiring in ${esc(city.name)}?</h2>
-      <p style="font-size:14px;line-height:1.65;color:#C7D2FE;margin:0 0 16px;">
+      <p style="font-size:14px;line-height:1.65;color:#F7DFD2;margin:0 0 16px;">
         Swapiki candidates send proof instead of a CV: real projects and a short voice walkthrough.
         No AI screening and no automated ranking &mdash; a person reads every profile.
       </p>
-      <a href="/signup" style="display:inline-block;background:#fff;color:#1E3A8A;font-weight:700;font-size:14px;padding:11px 22px;border-radius:999px;text-decoration:none;">Create your profile</a>
-      <a href="/jobs" style="display:inline-block;margin-left:8px;color:#C7D2FE;font-weight:700;font-size:14px;padding:11px 18px;text-decoration:none;">All jobs in India</a>
+      <a href="/signup" style="display:inline-block;background:#fff;color:#B9491F;font-weight:700;font-size:14px;padding:11px 22px;border-radius:999px;text-decoration:none;">Create your profile</a>
+      <a href="/jobs" style="display:inline-block;margin-left:8px;color:#F7DFD2;font-weight:700;font-size:14px;padding:11px 18px;text-decoration:none;">All jobs in India</a>
     </section>`;
 
   const bodyHtml = `
     <article style="margin:22px 0 0;">
       ${lede}
-      <h2 style="font-size:19px;margin:0 0 14px;color:#0F172A;">Open roles in ${esc(city.name)}</h2>
+      <h2 style="font-size:19px;margin:0 0 14px;color:#17130E;">Open roles in ${esc(city.name)}</h2>
       ${list}
     </article>
     ${faqHtml}

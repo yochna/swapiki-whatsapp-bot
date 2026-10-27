@@ -2327,43 +2327,62 @@ class SwapikiApp {
     const qrSrc = url =>
       'https://api.qrserver.com/v1/create-qr-code/?size=176x176&margin=0&data=' + encodeURIComponent(url);
 
-    const makeCard = (label, sub, icon, iconClass, href) => `
-      <a href="${this.escapeHtml(href)}" target="_blank" rel="noopener noreferrer"
-         class="flex items-center gap-4 bg-white border border-slate-200 rounded-2xl p-4 hover:border-primary/40 hover:shadow-sm transition-all">
-        <img src="${qrSrc(href)}" alt="QR code to join the ${this.escapeHtml(label)} channel" width="88" height="88"
-             loading="lazy" referrerpolicy="no-referrer" class="w-[88px] h-[88px] rounded-lg border border-slate-100 shrink-0"/>
-        <span class="min-w-0">
-          <span class="flex items-center gap-2 text-sm font-bold text-slate-800">
-            <span class="material-symbols-outlined text-[18px] ${iconClass}">${icon}</span>
-            ${this.escapeHtml(label)}
-          </span>
-          <span class="block text-xs text-slate-500 mt-1">${this.escapeHtml(sub)}</span>
-        </span>
-      </a>`;
-
+    const esc = (v) => this.escapeHtml(v);
     const tgTarget = bot ? `https://t.me/${encodeURIComponent(bot)}?start=channel` : tgUrl;
 
-    const cards = [];
-    if (tgTarget) {
-      cards.push(makeCard('Telegram', 'Job alerts the moment they are approved, plus profile tips.', 'send', 'text-sky-500', tgTarget));
-    }
-    if (waUrl) {
-      cards.push(makeCard('WhatsApp', 'Job alerts on WhatsApp. Tap the link or scan to join.', 'chat', 'text-emerald-500', waUrl));
-    }
-    if (!cards.length) return '';
+    // One button style, one icon family (Material Symbols, like the rest of the
+    // app) and the brand's own ink / cream / orange - no per-channel colours.
+    const channels = [];
+    if (tgTarget) channels.push({ label: 'Telegram', cta: 'Join on Telegram', icon: 'send', href: tgTarget });
+    if (waUrl) channels.push({ label: 'WhatsApp', cta: 'Join on WhatsApp', icon: 'chat', href: waUrl });
+    if (!channels.length) return '';
+
+    const buttons = channels.map((c) => `
+          <a href="${esc(c.href)}" target="_blank" rel="noopener noreferrer"
+             class="group inline-flex items-center justify-center gap-2 rounded-full bg-[#17130E] px-5 py-3 text-sm font-bold text-[#F7F3EC] transition-colors hover:bg-[#D9481F] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D9481F]">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">${c.icon}</span>
+            ${esc(c.cta)}
+            <span class="material-symbols-outlined text-[16px] opacity-60 transition-transform group-hover:translate-x-0.5" aria-hidden="true">arrow_forward</span>
+          </a>`).join('');
+
+    // The QR codes are for someone reading this on a laptop who wants the link
+    // on their phone. They sit behind a quiet disclosure instead of leading the
+    // card, and lazy-load, so nothing is requested from the QR service until
+    // the visitor opens it.
+    const qrs = channels.map((c) => `
+            <figure class="flex flex-col items-center gap-2 text-center">
+              <img src="${qrSrc(c.href)}" alt="QR code to join the ${esc(c.label)} channel" width="112" height="112"
+                   loading="lazy" referrerpolicy="no-referrer"
+                   class="h-28 w-28 rounded-xl border border-[#E1D9CB] bg-white p-1.5"/>
+              <figcaption class="text-xs font-bold text-[#6B6156]">${esc(c.label)}</figcaption>
+            </figure>`).join('');
 
     const personalLink = isAuthed && bot
-      ? `<button type="button" class="mt-3 text-xs font-bold text-primary hover:underline" data-tg-link>Get your personal Telegram link</button>`
+      ? `<p class="mt-4 text-xs text-[#6B6156]">Already on Telegram? <button type="button" class="font-bold text-[#D9481F] hover:underline" data-tg-link>Get your personal Telegram link</button></p>`
       : '';
 
     return `
-      <section class="mb-6" aria-label="Join our channels">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="material-symbols-outlined text-primary text-[18px]">notifications_active</span>
-          <h2 class="text-sm font-bold text-slate-800">Get new jobs the moment they go live</h2>
+      <section class="mb-8" aria-label="Join our channels">
+        <div class="rounded-2xl border border-[#E1D9CB] bg-[#F7F3EC] p-5 sm:p-6">
+          <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between md:gap-8">
+            <div class="md:max-w-md">
+              <p class="mb-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#D9481F]">Job alerts</p>
+              <h2 class="font-headline-sm text-xl font-bold leading-snug text-[#17130E]">Get new jobs the moment they go live</h2>
+              <p class="mt-1.5 text-sm leading-relaxed text-[#6B6156]">Pick the app you already use. New roles land there as soon as they are approved.</p>
+            </div>
+            <div class="flex shrink-0 flex-col gap-2.5 sm:flex-row">${buttons}
+            </div>
+          </div>
+          <details class="mt-5 border-t border-[#E1D9CB] pt-4">
+            <summary class="flex cursor-pointer list-none items-center gap-1.5 text-xs font-bold text-[#6B6156] hover:text-[#D9481F] [&::-webkit-details-marker]:hidden">
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">qr_code_2</span>
+              Prefer your phone? Show QR codes
+            </summary>
+            <div class="mt-4 flex flex-wrap gap-6">${qrs}
+            </div>
+          </details>
+          ${personalLink}
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${cards.join('')}</div>
-        ${personalLink}
       </section>`;
   }
 
@@ -2414,7 +2433,7 @@ class SwapikiApp {
     if (!hint) {
       hint = document.createElement('div');
       hint.setAttribute('data-tg-code', '');
-      hint.className = 'mt-2 text-xs text-slate-500';
+      hint.className = 'mt-2 text-xs text-[#6B6156]';
       section.appendChild(hint);
     }
     hint.innerHTML = 'On the phone? Send this code to the bot chat instead: ' +

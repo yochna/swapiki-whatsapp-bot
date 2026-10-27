@@ -105,17 +105,17 @@ const jobCard = (j) => {
   // the SPA because this board is what a no-JS visitor sees before the app boots.
   const share = shareRow(`https://swapiki.com${href}`, `${j.title}${j.company ? " at " + j.company : ""}`);
   return `
-      <div style="border:1px solid #E2E8F0;border-radius:14px;padding:18px 20px;margin-bottom:14px;background:#fff;">
+      <div style="border:1px solid #E1D9CB;border-radius:14px;padding:18px 20px;margin-bottom:14px;background:#fff;">
         <a href="${esc(href)}"
-           style="font-weight:700;font-size:17px;color:#0F172A;text-decoration:none;">${title}</a>
-        <div style="font-size:13px;color:#475569;margin:4px 0 8px;">${esc(j.company)}${j.location ? " &middot; " + esc(j.location) : ""}</div>
+           style="font-weight:700;font-size:17px;color:#17130E;text-decoration:none;">${title}</a>
+        <div style="font-size:13px;color:#5A5046;margin:4px 0 8px;">${esc(j.company)}${j.location ? " &middot; " + esc(j.location) : ""}</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-          <span style="font-size:11px;font-weight:700;background:#E0E7FF;color:#1E3A8A;padding:4px 10px;border-radius:999px;border:1px solid #C7D2FE;">${esc((j.category || "any").toUpperCase())}</span>
-          ${j.salary ? `<span style="font-size:12px;color:#64748B;">${esc(j.salary)}</span>` : ""}
+          <span style="font-size:11px;font-weight:700;background:#FBEDE6;color:#B9491F;padding:4px 10px;border-radius:999px;border:1px solid #F7DFD2;">${esc((j.category || "any").toUpperCase())}</span>
+          ${j.salary ? `<span style="font-size:12px;color:#6B6156;">${esc(j.salary)}</span>` : ""}
           ${
             applyUrl
               ? `<a href="${esc(applyUrl)}" target="_blank" rel="noopener noreferrer nofollow"
-                   style="margin-left:auto;font-size:12px;font-weight:700;color:#1E3A8A;text-decoration:none;border:1px solid #C7D2FE;background:#EEF2FF;padding:6px 14px;border-radius:999px;">Apply &rarr;</a>`
+                   style="margin-left:auto;font-size:12px;font-weight:700;color:#B9491F;text-decoration:none;border:1px solid #F7DFD2;background:#FBEDE6;padding:6px 14px;border-radius:999px;">Apply &rarr;</a>`
               : ""
           }
         </div>
@@ -129,9 +129,9 @@ const jobCard = (j) => {
  */
 const renderBoardRows = (jobs) => (jobs.length
   ? groupJobs(jobs).map((g) => `
-      <h2 style="font-size:20px;font-weight:700;color:#0F172A;margin:28px 0 4px;">${esc(g.label)} <span style="font-size:13px;font-weight:600;color:#64748B;">(${g.jobs.length})</span></h2>
+      <h2 style="font-size:20px;font-weight:700;color:#17130E;margin:28px 0 4px;">${esc(g.label)} <span style="font-size:13px;font-weight:600;color:#6B6156;">(${g.jobs.length})</span></h2>
       ${g.jobs.map(jobCard).join("")}`).join("")
-  : `<p style="font-size:14px;color:#64748B;">No open positions right now. Check back soon, or open the live board &mdash; new vetted openings are added regularly.</p>`);
+  : `<p style="font-size:14px;color:#6B6156;">No open positions right now. Check back soon, or open the live board &mdash; new vetted openings are added regularly.</p>`);
 
 /**
  * Rewrites index.html for the /jobs route: correct title/description/canonical
@@ -179,7 +179,7 @@ export const injectJobsShell = (html, jobs, total) => {
     // is dropped rather than printed with a total the route does not have.
     const more =
       total > shown.length
-        ? `<p style="font-size:13px;color:#64748B;margin-top:20px;">Showing the first ${shown.length} of ${total} openings. <a href="/#jobs" style="color:#1E3A8A;font-weight:700;text-decoration:none;">Open the live board</a> to search them all.</p>`
+        ? `<p style="font-size:13px;color:#6B6156;margin-top:20px;">Showing the first ${shown.length} of ${total} openings. <a href="/#jobs" style="color:#B9491F;font-weight:700;text-decoration:none;">Open the live board</a> to search them all.</p>`
         : "";
     out = out.replace(
       /<div id="jobs-container"><\/div>/i,
@@ -226,21 +226,21 @@ const renderStaticFallback = (jobs) => {
 <meta name="twitter:image" content="https://swapiki.com/assets/og-image.png"/>
 ${jsonLdBlock()}
 </head>
-<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#0F172A;">
+<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F7F3EC;color:#17130E;">
   <div style="max-width:800px;margin:0 auto;padding:32px 20px 64px;">
     <a href="/" style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;">
       <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-        <rect width="100" height="100" rx="22" fill="#0B1E45"/>
-        <rect x="40" y="17.5" width="20" height="35" rx="10" fill="#ffffff"/>
-        <path d="M 26 47.5 A 24 24 0 0 0 74 47.5 L 67.5 47.5 A 17.5 17.5 0 0 1 32.5 47.5 Z" fill="#ffffff"/>
-        <rect x="47" y="63" width="6" height="16.5" fill="#ffffff"/>
-        <rect x="34" y="79" width="32" height="6.5" rx="3.25" fill="#ffffff"/>
+        <rect width="100" height="100" rx="22" fill="#17130E"/>
+        <rect x="40" y="17.5" width="20" height="35" rx="10" fill="#F7F3EC"/>
+        <path d="M 26 47.5 A 24 24 0 0 0 74 47.5 L 67.5 47.5 A 17.5 17.5 0 0 1 32.5 47.5 Z" fill="#F7F3EC"/>
+        <rect x="47" y="63" width="6" height="16.5" fill="#F7F3EC"/>
+        <rect x="34" y="79" width="32" height="6.5" rx="3.25" fill="#F7F3EC"/>
       </svg>
-      <span style="font-weight:800;font-size:20px;color:#1E3A8A;">Swapiki</span>
+      <span style="font-weight:800;font-size:20px;color:#17130E;">Swapiki</span>
     </a>
 
-    <h1 style="font-size:32px;line-height:1.25;margin:32px 0 8px;color:#0F172A;">Swapiki Jobs — IT, BFSI &amp; other roles in India</h1>
-    <p style="font-size:15px;line-height:1.6;color:#475569;max-width:640px;margin:0 0 28px;">
+    <h1 style="font-size:32px;line-height:1.25;margin:32px 0 8px;color:#17130E;">Swapiki Jobs — IT, BFSI &amp; other roles in India</h1>
+    <p style="font-size:15px;line-height:1.6;color:#5A5046;max-width:640px;margin:0 0 28px;">
       Hand-sourced openings shared by hiring teams. Every candidate applies with a <strong>proof-backed profile</strong> &mdash; real
       projects and a 2-minute voice walkthrough for human review. No AI screening bots.
     </p>
@@ -248,8 +248,8 @@ ${jsonLdBlock()}
     ${rowsHtml}
 
     <div style="margin-top:24px;text-align:center;">
-      <a href="/#jobs" style="display:inline-block;background:#1E3A8A;color:#fff;font-weight:700;font-size:15px;padding:13px 28px;border-radius:12px;text-decoration:none;">Open the live jobs board</a>
-      <p style="font-size:12px;color:#94A3B8;margin-top:12px;">Sign in and complete your profile to 80% to search, filter and match openings.</p>
+      <a href="/#jobs" style="display:inline-block;background:#E85D2A;color:#17130E;font-weight:700;font-size:15px;padding:13px 28px;border-radius:12px;text-decoration:none;">Open the live jobs board</a>
+      <p style="font-size:12px;color:#8C8175;margin-top:12px;">Sign in and complete your profile to 80% to search, filter and match openings.</p>
     </div>
   </div>
 </body>

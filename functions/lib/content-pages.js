@@ -180,8 +180,8 @@ const head = (p) => {
 
 const footer = () => {
   const links = Object.values(CONTENT_PAGES)
-    .map((p) => `<a href="${p.path}" style="color:#475569;text-decoration:none;">${esc(p.eyebrow)}</a>`)
-    .join('<span style="color:#CBD5E1;">&middot;</span>');
+    .map((p) => `<a href="${p.path}" style="color:#5A5046;text-decoration:none;">${esc(p.eyebrow)}</a>`)
+    .join('<span style="color:#D5C9B6;">&middot;</span>');
   const hubs = [
     ["bangalore", "Bangalore"],
     ["hyderabad", "Hyderabad"],
@@ -191,44 +191,44 @@ const footer = () => {
     ["chennai", "Chennai"],
     ["remote", "Remote"]
   ]
-    .map(([slug, name]) => `<a href="/jobs/in/${slug}" style="color:#475569;text-decoration:none;">Jobs in ${esc(name)}</a>`)
-    .join('<span style="color:#CBD5E1;">&middot;</span>');
-  return `<footer style="margin-top:56px;border-top:1px solid #E2E8F0;padding-top:20px;font-size:13px;">
+    .map(([slug, name]) => `<a href="/jobs/in/${slug}" style="color:#5A5046;text-decoration:none;">Jobs in ${esc(name)}</a>`)
+    .join('<span style="color:#D5C9B6;">&middot;</span>');
+  return `<footer style="margin-top:56px;border-top:1px solid #E1D9CB;padding-top:20px;font-size:13px;">
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
       ${links}
-      <span style="color:#CBD5E1;">&middot;</span>
-      <a href="/jobs" style="color:#475569;text-decoration:none;">Jobs</a>
-      <span style="color:#CBD5E1;">&middot;</span>
-      <a href="/" style="color:#475569;text-decoration:none;">Home</a>
+      <span style="color:#D5C9B6;">&middot;</span>
+      <a href="/jobs" style="color:#5A5046;text-decoration:none;">Jobs</a>
+      <span style="color:#D5C9B6;">&middot;</span>
+      <a href="/" style="color:#5A5046;text-decoration:none;">Home</a>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:12px;">
       ${hubs}
     </div>
-    <p style="color:#94A3B8;margin:14px 0 0;">Swapiki is a sub-product of Swaniki LLP. Nothing on this page claims verification of a person or their work.</p>
+    <p style="color:#8C8175;margin:14px 0 0;">Swapiki is a sub-product of Swaniki LLP. Nothing on this page claims verification of a person or their work.</p>
   </footer>`;
 };
 
 export function renderContentPage(p) {
   const sections = (p.sections || []).map((s) => `
     <section style="margin:34px 0 0;">
-      <h2 style="font-size:21px;line-height:1.3;color:#0F172A;margin:0 0 10px;">${esc(s.h2)}</h2>
-      ${(s.paras || []).map((t) => `<p style="font-size:15px;line-height:1.7;color:#334155;margin:0 0 12px;">${esc(t)}</p>`).join("")}
+      <h2 style="font-size:21px;line-height:1.3;color:#17130E;margin:0 0 10px;">${esc(s.h2)}</h2>
+      ${(s.paras || []).map((t) => `<p style="font-size:15px;line-height:1.7;color:#2E2820;margin:0 0 12px;">${esc(t)}</p>`).join("")}
     </section>`).join("");
 
   const faqs = Array.isArray(p.faqs) && p.faqs.length
     ? `<section style="margin:40px 0 0;">
-         <h2 style="font-size:21px;color:#0F172A;margin:0 0 12px;">Questions</h2>
-         ${p.faqs.map(([q, a]) => `<details style="border:1px solid #E2E8F0;border-radius:12px;padding:14px 16px;margin:0 0 10px;background:#fff;">
-             <summary style="font-size:15px;font-weight:700;color:#0F172A;cursor:pointer;">${esc(q)}</summary>
-             <p style="font-size:14px;line-height:1.65;color:#334155;margin:10px 0 0;">${esc(a)}</p>
+         <h2 style="font-size:21px;color:#17130E;margin:0 0 12px;">Questions</h2>
+         ${p.faqs.map(([q, a]) => `<details style="border:1px solid #E1D9CB;border-radius:12px;padding:14px 16px;margin:0 0 10px;background:#fff;">
+             <summary style="font-size:15px;font-weight:700;color:#17130E;cursor:pointer;">${esc(q)}</summary>
+             <p style="font-size:14px;line-height:1.65;color:#2E2820;margin:10px 0 0;">${esc(a)}</p>
            </details>`).join("")}
        </section>`
     : "";
 
   const cta = p.cta
     ? `<p style="margin:36px 0 0;">
-         <a href="${esc(p.cta.href)}" style="display:inline-block;background:#1E3A8A;color:#fff;font-weight:700;font-size:15px;padding:13px 26px;border-radius:999px;text-decoration:none;">${esc(p.cta.label)}</a>
-         ${p.cta.note ? `<span style="display:inline-block;margin-left:12px;font-size:13px;color:#64748B;">${esc(p.cta.note)}</span>` : ""}
+         <a href="${esc(p.cta.href)}" style="display:inline-block;background:#E85D2A;color:#17130E;font-weight:700;font-size:15px;padding:13px 26px;border-radius:999px;text-decoration:none;">${esc(p.cta.label)}</a>
+         ${p.cta.note ? `<span style="display:inline-block;margin-left:12px;font-size:13px;color:#6B6156;">${esc(p.cta.note)}</span>` : ""}
        </p>`
     : "";
 
@@ -253,21 +253,21 @@ export function renderContentPage(p) {
 <meta name="twitter:image" content="${H}/assets/og-image.png"/>
 ${head(p)}
 </head>
-<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F8FAFC;color:#0F172A;">
+<body style="margin:0;font-family:Inter,system-ui,-apple-system,sans-serif;background:#F7F3EC;color:#17130E;">
   <div style="max-width:760px;margin:0 auto;padding:32px 20px 64px;">
     <a href="/" style="display:inline-flex;align-items:center;gap:10px;text-decoration:none;">
       <svg width="36" height="36" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <rect width="100" height="100" rx="22" fill="#0B1E45"/>
-        <rect x="40" y="17.5" width="20" height="35" rx="10" fill="#ffffff"/>
-        <path d="M 26 47.5 A 24 24 0 0 0 74 47.5 L 67.5 47.5 A 17.5 17.5 0 0 1 32.5 47.5 Z" fill="#ffffff"/>
-        <rect x="47" y="63" width="6" height="16.5" fill="#ffffff"/>
-        <rect x="34" y="79" width="32" height="6.5" rx="3.25" fill="#ffffff"/>
+        <rect width="100" height="100" rx="22" fill="#17130E"/>
+        <rect x="40" y="17.5" width="20" height="35" rx="10" fill="#F7F3EC"/>
+        <path d="M 26 47.5 A 24 24 0 0 0 74 47.5 L 67.5 47.5 A 17.5 17.5 0 0 1 32.5 47.5 Z" fill="#F7F3EC"/>
+        <rect x="47" y="63" width="6" height="16.5" fill="#F7F3EC"/>
+        <rect x="34" y="79" width="32" height="6.5" rx="3.25" fill="#F7F3EC"/>
       </svg>
-      <span style="font-weight:800;font-size:20px;color:#1E3A8A;">Swapiki</span>
+      <span style="font-weight:800;font-size:20px;color:#17130E;">Swapiki</span>
     </a>
-    <p style="margin:28px 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#64748B;">${esc(p.eyebrow)}</p>
-    <h1 style="font-size:32px;line-height:1.2;color:#0F172A;margin:0 0 12px;">${esc(p.h1)}</h1>
-    <p style="font-size:16px;line-height:1.7;color:#334155;margin:0;">${esc(p.lead)}</p>
+    <p style="margin:28px 0 6px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6B6156;">${esc(p.eyebrow)}</p>
+    <h1 style="font-size:32px;line-height:1.2;color:#17130E;margin:0 0 12px;">${esc(p.h1)}</h1>
+    <p style="font-size:16px;line-height:1.7;color:#2E2820;margin:0;">${esc(p.lead)}</p>
     ${sections}
     ${faqs}
     ${cta}
