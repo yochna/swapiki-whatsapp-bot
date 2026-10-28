@@ -30,11 +30,12 @@ import { sendMessage, esc } from "../lib/telegram.js";
 
 const DEFAULT_SUPABASE_URL = "https://eusbnfgfurrmrccaxbub.supabase.co";
 
-const REASONS = new Set(["scam", "impersonation", "stolen_work", "contact", "spam", "other"]);
+const REASONS = new Set(["scam", "impersonation", "stolen_work", "ai_voice", "contact", "spam", "other"]);
 const REASON_LABEL = {
   scam: "Scam / fraud",
   impersonation: "Fake person / stolen identity",
   stolen_work: "Stolen work or content",
+  ai_voice: "AI-generated or cloned voice recording",
   contact: "Asks for money / off-platform contact",
   spam: "Spam or advertising",
   other: "Other"

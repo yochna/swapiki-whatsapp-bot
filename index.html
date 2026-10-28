@@ -189,7 +189,7 @@
        in parallel with the HTML instead of only after it parses. Execution
        order is still guaranteed by the defer tags below. -->
   <link rel="preload" as="script" href="/vendor/supabase.min.js?v=20260924x" />
-  <link rel="preload" as="script" href="/dist/js/app.js?v=20261027b" />
+  <link rel="preload" as="script" href="/dist/js/app.js?v=20261027c" />
 
   <!-- Google Identity Services (Sign In With Google) — the script itself is
        loaded dynamically by app.js ONLY on the production domain (swapiki.com).
@@ -243,7 +243,7 @@
        compiler to the browser and recompiles styles on every DOM change.
        That's the #1 cause of this app feeling laggy — a real build removes
        that entirely and ships a plain, cached, ~50KB CSS file instead. -->
-  <link rel="stylesheet" href="/dist/output.css?v=20261027b" />
+  <link rel="stylesheet" href="/dist/output.css?v=20261027c" />
 
   <style>
     body {
@@ -5875,6 +5875,16 @@
 
       </div>
 
+      <label class="flex items-start gap-3 rounded-xl border border-[#E1D9CB] bg-[#F7F3EC] p-3.5 mb-4 cursor-pointer">
+        <input id="audio-own-voice" type="checkbox"
+          class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary focus:ring-primary"/>
+        <span class="text-xs leading-relaxed text-[#2E2820]">
+          <strong class="text-[#17130E]">This is my own voice, recorded live right now.</strong>
+          I am not using an AI voice, voice cloning or text-to-speech, and I am not playing a recording.
+          Profiles that do are removed.
+        </span>
+      </label>
+
       <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 mt-auto">
         <button onclick="app.closeAudioModal()"
           class="px-4 py-2 text-slate-600 font-bold text-xs rounded-lg hover:bg-slate-100">Skip Audio</button>
@@ -6732,6 +6742,7 @@
           <option value="scam">Looks like a scam or fraud</option>
           <option value="impersonation">Fake person or stolen identity</option>
           <option value="stolen_work">Stolen work or content</option>
+          <option value="ai_voice">The voice recording is AI-generated or cloned</option>
           <option value="contact">Asks for money or off-platform contact</option>
           <option value="spam">Spam or advertising</option>
           <option value="other">Something else</option>
@@ -7030,7 +7041,7 @@
    <script src="/dist/js/profileChecklist.js?v=20261014m" defer></script>
     <script src="/dist/js/profileMatch.js?v=20261001a" defer></script>
     <script src="/dist/js/githubMatch.js?v=20261001a" defer></script>
-    <script src="/dist/js/app.js?v=20261027b" defer></script>
+    <script src="/dist/js/app.js?v=20261027c" defer></script>
 </body>
 
 </html>

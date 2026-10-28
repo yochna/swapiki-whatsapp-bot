@@ -965,6 +965,7 @@ class SwapikiApp {
       scam: 'Scam / fraud',
       impersonation: 'Fake person',
       stolen_work: 'Stolen work',
+      ai_voice: 'AI-generated voice',
       contact: 'Money / off-platform contact',
       spam: 'Spam',
       other: 'Other'
@@ -7867,6 +7868,47 @@ if (statusDot) {
       const row = document.createElement('div');
       row.className = "relative flex gap-4 md:gap-5 proof-entry";
       row.style.animationDelay = `${Math.min(idx * 0.08, 0.32)}s`;
+      // A player is drawn ONLY for a real recording. A project with none gets a
+      // plain "no voice yet" note - the site never voices a candidate's typed text
+      // with a synthetic voice (the built-in fictional sample is the one exception,
+      // and it is labelled as a demo).
+      const isSampleProfile = !this.publicUsername && !!profile && profile.id === 'ananya_sharma';
+      const audioPlayerHtml = (proj.audioUrl || isSampleProfile)
+        ? `              <div class="bg-gradient-to-r from-primary-container via-primary to-slate-900 p-5 md:p-6 rounded-2xl mb-6 text-white shadow-xl relative overflow-hidden">
+                <div class="flex items-center justify-between mb-4">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-tertiary-fixed animate-ping"></span>
+                    <span class="text-xs font-extrabold tracking-wider uppercase text-tertiary-fixed">${proj.audioUrl ? 'CANDIDATE VOICE WALKTHROUGH' : 'AI-GENERATED PRODUCT DEMO VOICE'}</span>
+                  </div>
+                  <span class="bg-white/10 text-white/90 text-xs px-2.5 py-1 rounded-full font-mono font-bold">${esc(proj.audioDuration || '01:45')}</span>
+                </div>
+                <div class="flex items-center gap-5">
+                  <button onclick="app.playProjectAudio('${safeId}')" class="w-14 h-14 rounded-full bg-white text-primary flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all shrink-0">
+                    <span id="play-icon-${safeId}" class="material-symbols-outlined text-3xl font-extrabold">play_arrow</span>
+                  </button>
+                  <div class="flex-1">
+                    <p class="text-xs font-bold text-blue-100 mb-2">${proj.audioUrl ? 'Candidate recording: impact & technical logic' : 'Product demo narration, not a candidate recording'}</p>
+                    <div class="audio-wave-anim flex-1 justify-between px-1 cursor-pointer" onclick="app.playProjectAudio('${safeId}')">
+                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.3s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.5s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.2s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.4s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.6s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.2s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.4s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.5s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.3s"></div>
+                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>`
+        : `<div class="flex items-center gap-3 rounded-2xl border border-dashed border-outline-variant bg-surface-container-low p-5 mb-6">
+                <span class="material-symbols-outlined text-outline" aria-hidden="true">mic_off</span>
+                <p class="text-sm text-on-surface-variant">No voice walkthrough has been recorded for this project yet.</p>
+              </div>`;
       row.innerHTML = `
         <!-- Proof ledger rail: numbered node + connecting line -->
         <div class="flex flex-col items-center shrink-0 pt-1">
@@ -7927,37 +7969,7 @@ if (statusDot) {
               </div>
             </div>
             <div class="lg:w-2/3 space-y-6">
-              <div class="bg-gradient-to-r from-primary-container via-primary to-slate-900 p-5 md:p-6 rounded-2xl mb-6 text-white shadow-xl relative overflow-hidden">
-                <div class="flex items-center justify-between mb-4">
-                  <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full bg-tertiary-fixed animate-ping"></span>
-                    <span class="text-xs font-extrabold tracking-wider uppercase text-tertiary-fixed">${proj.audioUrl ? 'CANDIDATE VOICE WALKTHROUGH' : 'AI-GENERATED PRODUCT DEMO VOICE'}</span>
-                  </div>
-                  <span class="bg-white/10 text-white/90 text-xs px-2.5 py-1 rounded-full font-mono font-bold">${esc(proj.audioDuration || '01:45')}</span>
-                </div>
-                <div class="flex items-center gap-5">
-                  <button onclick="app.playProjectAudio('${safeId}')" class="w-14 h-14 rounded-full bg-white text-primary flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all shrink-0">
-                    <span id="play-icon-${safeId}" class="material-symbols-outlined text-3xl font-extrabold">play_arrow</span>
-                  </button>
-                  <div class="flex-1">
-                    <p class="text-xs font-bold text-blue-100 mb-2">${proj.audioUrl ? 'Candidate recording: impact & technical logic' : 'Product demo narration, not a candidate recording'}</p>
-                    <div class="audio-wave-anim flex-1 justify-between px-1 cursor-pointer" onclick="app.playProjectAudio('${safeId}')">
-                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.3s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.5s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.2s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.4s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.6s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.2s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.4s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.5s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.3s"></div>
-                      <div class="wave-bar bg-white" style="animation-delay: 0.1s"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ${audioPlayerHtml}
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <h4 class="font-label-sm text-outline uppercase mb-2 tracking-widest font-bold">THE PROBLEM</h4>
@@ -8024,6 +8036,17 @@ if (statusDot) {
       return;
     }
     
+    // No recording. Only the built-in fictional sample profile may play a clearly
+    // labelled demo voice. For a real candidate the site NEVER speaks for them:
+    // reading their typed text aloud in a synthetic voice would put an AI voice
+    // on their profile, which Swapiki does not allow.
+    const isSampleProfile = !this.publicUsername && !!profile && profile.id === 'ananya_sharma';
+    if (!isSampleProfile) {
+      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+      this.showToast('No voice recording has been added for this project yet.');
+      return;
+    }
+
     if (icon) {
       if (icon.textContent === 'play_arrow') {
         icon.textContent = 'pause';
@@ -8538,6 +8561,9 @@ if (statusDot) {
     this.currentRecordingProjectId = projectId;
     const modal = document.getElementById('modal-audio-studio');
     if (modal) modal.classList.remove('hidden');
+    // Every attempt starts with the declaration unticked.
+    const ownVoiceBox = document.getElementById('audio-own-voice');
+    if (ownVoiceBox) ownVoiceBox.checked = false;
 
     // Fresh attempt every time the studio opens: new random session + new random
     // 3-word code, so a stored clip can never satisfy the check.
@@ -8678,6 +8704,14 @@ if (statusDot) {
 
   async saveRecordedAudio() {
     const engine = window.swapikiAudioEngine;
+
+    // Declaration: this is the candidate's own voice, recorded live. `=== false`
+    // so a page without the checkbox (older cached HTML) is not locked out.
+    const ownVoice = document.getElementById('audio-own-voice');
+    if (ownVoice && ownVoice.checked === false) {
+      this.showToast('Please confirm this is your own live voice (no AI voice) before saving.');
+      return;
+    }
 
     // Still recording — must stop first
     if (engine.isRecording) {
