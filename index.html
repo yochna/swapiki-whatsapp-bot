@@ -1203,6 +1203,7 @@
       }
     }
   </style>
+  <noscript><style>#view-landing [data-reveal] { opacity: 1 !important; transform: none !important; }</style></noscript>
   <style>
     /* ================= LANDING PAGE REDESIGN ================= */
     /* Landing page scroll-reveal animations */
@@ -2343,6 +2344,58 @@
        word-for-word, including the critical ones (3/5, "fairly good pilot
        tool"). A wall of five-star quotes would be both dishonest and easy to
        dismiss, so the ratings are shown exactly as they were given. */
+    /* ===== Browse by city: the block had markup but no styles of its own ===== */
+    #view-landing .lp-city-hubs {
+      padding: 76px 0 72px;
+      background: var(--lp-paper);
+      border-top: 1px solid var(--lp-line);
+    }
+    #view-landing .lp-city-hubs-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 32px;
+    }
+    #view-landing .lp-city-hubs-head h2 {
+      font-size: clamp(2rem, 4.6vw, 3.4rem);
+      line-height: 1.04;
+      margin-top: 24px;
+    }
+    #view-landing .lp-city-hubs-head .lp-lead { max-width: 380px; padding-bottom: 6px; }
+    #view-landing .lp-city-hubs-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-top: 44px;
+    }
+    #view-landing .lp-city-hub {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 22px;
+      background: #FFFDF9;
+      border: 1px solid var(--lp-line);
+      border-radius: 14px;
+      color: var(--lp-ink);
+      font-weight: 600;
+      text-decoration: none;
+      transition: border-color .25s ease, background-color .25s ease;
+    }
+    #view-landing .lp-city-hub:hover { border-color: var(--lp-ink); background: #fff; }
+    #view-landing .lp-city-hub-arrow { color: var(--lp-accent); display: inline-block; }
+    #view-landing .lp-city-hubs-more { margin-top: 28px; }
+    #view-landing .lp-city-hubs-more a {
+      color: var(--lp-ink);
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-color: var(--lp-accent);
+      text-underline-offset: 5px;
+    }
+    @media (max-width: 900px) { #view-landing .lp-city-hubs-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { #view-landing .lp-city-hub { padding: 16px; } }
+
     #view-landing .lp-fb {
       padding: 76px 0 72px;
       background: var(--lp-paper);
@@ -4575,23 +4628,23 @@
         <!-- ================= 04 - PROOF ================= -->
         <section class="lp-proof">
           <aside class="lp-proof-left">
-            <span class="lp-eyebrow">The guarantee</span>
-            <h2>Read by humans.<br /><em>Not ranked by robots.</em></h2>
-            <p class="lp-lead">Swapiki is a skill-highlighting tool, not an evaluation bot. Your proof and your voice
+            <span class="lp-eyebrow" data-reveal="fade">The guarantee</span>
+            <h2 data-reveal>Read by humans.<br /><em>Not ranked by robots.</em></h2>
+            <p class="lp-lead" data-reveal>Swapiki is a skill-highlighting tool, not an evaluation bot. Your proof and your voice
               go to a person &mdash; intact.</p>
 
             <div class="lp-list">
-              <div class="lp-item">
+              <div class="lp-item" data-reveal>
                 <div class="k">No parsing</div>
                 <div class="v"><b>No AI keyword screening.</b> Your profile is never auto-rejected, scored or sorted
                   by a black box.</div>
               </div>
-              <div class="lp-item">
+              <div class="lp-item" data-reveal>
                 <div class="k">No scoring</div>
                 <div class="v"><b>No voice or emotion analysis.</b> Your audio stays raw human evidence &mdash; we
                   don't grade how you sound.</div>
               </div>
-              <div class="lp-item">
+              <div class="lp-item" data-reveal>
                 <div class="k">No walls</div>
                 <div class="v"><b>No hidden algorithmic ranking.</b> Recruiters open your link and review it
                   directly.</div>
@@ -4601,29 +4654,29 @@
             <button type="button" class="lp-btn lp-btn-ghost" onclick="app.openTrustSecurityModal()">How Swapiki fights
               fraud &rarr;</button>
 
-            <div class="lp-foot-big"><span>500+</span> job listings</div>
+            <div class="lp-foot-big" data-reveal><span>500+</span> job listings</div>
           </aside>
 
           <section class="lp-proof-right">
-            <div class="lp-quote-mark">&rdquo;</div>
-            <span class="lp-eyebrow plain">When a recruiter opens your link</span>
+            <div class="lp-quote-mark" data-reveal>&rdquo;</div>
+            <span class="lp-eyebrow plain" data-reveal="fade">When a recruiter opens your link</span>
 
-            <p class="lp-quote">They read your <em>proof</em>, press play on your <em>walkthrough</em>, and decide
+            <p class="lp-quote" data-reveal>They read your <em>proof</em>, press play on your <em>walkthrough</em>, and decide
               from what you actually said.
             </p>
 
             <div class="lp-eg">
-              <div class="lp-eg-row">
+              <div class="lp-eg-row" data-reveal>
                 <div class="n">01</div>
                 <div><b>Your projects, in your structure.</b> The problem, what you owned, and the one number that
                   moved.</div>
               </div>
-              <div class="lp-eg-row">
+              <div class="lp-eg-row" data-reveal>
                 <div class="n">02</div>
                 <div><b>Two minutes of your reasoning.</b> The trade-offs behind the work, explained in your own words,
                   in your own voice.</div>
               </div>
-              <div class="lp-eg-row">
+              <div class="lp-eg-row" data-reveal>
                 <div class="n">03</div>
                 <div><b>No score attached.</b> No ranking, no verdict, and nothing an algorithm can quietly filter you
                   out on.</div>
@@ -4639,20 +4692,20 @@
         <section class="lp-live" id="lp-live-stats" hidden>
           <div class="lp-wrap">
             <div class="lp-live-grid">
-              <div class="lp-live-cell">
+              <div class="lp-live-cell" data-reveal="scale">
                 <div class="lp-live-n" id="lp-live-profiles">&mdash;</div>
                 <div class="lp-live-l">Published profiles</div>
               </div>
-              <div class="lp-live-cell">
+              <div class="lp-live-cell" data-reveal="scale">
                 <div class="lp-live-n" id="lp-live-week">&mdash;</div>
                 <div class="lp-live-l">Published this week</div>
               </div>
-              <div class="lp-live-cell">
+              <div class="lp-live-cell" data-reveal="scale">
                 <div class="lp-live-n" id="lp-live-jobs">&mdash;</div>
                 <div class="lp-live-l"><a href="/jobs" style="color:inherit;text-decoration:none;">Open roles</a></div>
               </div>
             </div>
-            <p class="lp-live-note">Live counts of what is actually on the platform right now. Nothing here is estimated.</p>
+            <p class="lp-live-note" data-reveal>Live counts of what is actually on the platform right now. Nothing here is estimated.</p>
           </div>
         </section>
 
@@ -4660,22 +4713,22 @@
           <div class="lp-wrap">
             <div class="lp-city-hubs-head">
               <div>
-                <span class="lp-eyebrow">Browse by city</span>
-                <h2>Jobs in <em>India's top hubs.</em></h2>
+                <span class="lp-eyebrow" data-reveal="fade">Browse by city</span>
+                <h2 data-reveal>Jobs in <em>India's top hubs.</em></h2>
               </div>
-              <p class="lp-lead">Find jobs by location. Every hub is built from live listings.</p>
+              <p class="lp-lead" data-reveal>Find jobs by location. Every hub is built from live listings.</p>
             </div>
             <div class="lp-city-hubs-grid">
-              <a class="lp-city-hub" href="/jobs/in/bangalore"><span>Bangalore</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/hyderabad"><span>Hyderabad</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/pune"><span>Pune</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/mumbai"><span>Mumbai</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/delhi-ncr"><span>Delhi NCR</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/chennai"><span>Chennai</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/kochi"><span>Kochi</span><span class="lp-city-hub-arrow">→</span></a>
-              <a class="lp-city-hub" href="/jobs/in/remote"><span>Remote</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/bangalore" data-reveal><span>Bangalore</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/hyderabad" data-reveal><span>Hyderabad</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/pune" data-reveal><span>Pune</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/mumbai" data-reveal><span>Mumbai</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/delhi-ncr" data-reveal><span>Delhi NCR</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/chennai" data-reveal><span>Chennai</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/kochi" data-reveal><span>Kochi</span><span class="lp-city-hub-arrow">→</span></a>
+              <a class="lp-city-hub" href="/jobs/in/remote" data-reveal><span>Remote</span><span class="lp-city-hub-arrow">→</span></a>
             </div>
-            <div class="lp-city-hubs-more">
+            <div class="lp-city-hubs-more" data-reveal>
               <a href="/jobs">Browse all jobs in India →</a>
             </div>
           </div>
@@ -4684,16 +4737,16 @@
           <div class="lp-wrap">
             <div class="lp-fb-head">
               <div>
-                <span class="lp-eyebrow">Pilot feedback</span>
-                <h2>What hiring managers<br /><em>actually said.</em></h2>
+                <span class="lp-eyebrow" data-reveal="fade">Pilot feedback</span>
+                <h2 data-reveal>What hiring managers<br /><em>actually said.</em></h2>
               </div>
-              <p class="lp-lead">Verbatim feedback from hiring leaders and engineering managers using Swapiki during
+              <p class="lp-lead" data-reveal>Verbatim feedback from hiring leaders and engineering managers using Swapiki during
                 the pilot. Ratings are shown exactly as they were given, critical ones included.</p>
             </div>
 
             <div class="lp-fb-grid">
 
-              <div class="lp-fb-card">
+              <div class="lp-fb-card" data-reveal="scale">
                 <div class="lp-fb-top">
                   <div class="lp-fb-av">RK</div>
                   <div>
@@ -4710,7 +4763,7 @@
                 <div class="lp-fb-foot"><span>Independent hiring consultant</span><span>Pune</span></div>
               </div>
 
-              <div class="lp-fb-card">
+              <div class="lp-fb-card" data-reveal="scale">
                 <div class="lp-fb-top">
                   <div class="lp-fb-av">PS</div>
                   <div>
@@ -4726,7 +4779,7 @@
                 <div class="lp-fb-foot"><span>Design hiring lead</span><span>Bengaluru</span></div>
               </div>
 
-              <div class="lp-fb-card">
+              <div class="lp-fb-card" data-reveal="scale">
                 <div class="lp-fb-top">
                   <div class="lp-fb-av">AM</div>
                   <div>
@@ -4742,7 +4795,7 @@
                 <div class="lp-fb-foot"><span>Boutique agency partner</span><span>Pune</span></div>
               </div>
 
-              <div class="lp-fb-card">
+              <div class="lp-fb-card" data-reveal="scale">
                 <div class="lp-fb-top">
                   <div class="lp-fb-av">SN</div>
                   <div>
@@ -4758,7 +4811,7 @@
                 <div class="lp-fb-foot"><span>Boutique HR agency</span><span>Bengaluru</span></div>
               </div>
 
-              <div class="lp-fb-card wide">
+              <div class="lp-fb-card wide" data-reveal="scale">
                 <div class="lp-fb-top">
                   <div class="lp-fb-av">VR</div>
                   <div>
@@ -4783,20 +4836,20 @@
           <div class="lp-wrap">
             <div class="lp-jobs-inner">
               <div class="lp-jobs-copy">
-                <span class="lp-eyebrow">The jobs board</span>
-                <h2>500+ job listings.<br /><em>One profile to answer all of them.</em></h2>
-                <p class="lp-lead">Real roles from teams hiring through Swapiki. Publish your proof once, then send the
+                <span class="lp-eyebrow" data-reveal="fade">The jobs board</span>
+                <h2 data-reveal>500+ job listings.<br /><em>One profile to answer all of them.</em></h2>
+                <p class="lp-lead" data-reveal>Real roles from teams hiring through Swapiki. Publish your proof once, then send the
                   same link to every recruiter you meet &mdash; no re-writing your story for each application.</p>
               </div>
 
-              <div class="lp-jobs-act">
+              <div class="lp-jobs-act" data-reveal>
                 <div class="lp-jobs-num"><span>500</span>+</div>
                 <a class="lp-btn lp-btn-primary" href="/jobs">Browse the jobs board <span aria-hidden="true">&rarr;</span></a>
                 <div class="lp-jobs-note">Sign in free &mdash; reach 80% to unlock</div>
               </div>
             </div>
 
-            <div class="lp-jobs-strip">
+            <div class="lp-jobs-strip" data-reveal>
               <span>Across India</span>
               <span>Remote &amp; onsite</span>
               <span>Full-time &amp; part-time</span>
@@ -4811,11 +4864,11 @@
         <section class="lp-faq">
           <div class="lp-wrap">
             <div class="lp-faq-inner">
-              <span class="lp-eyebrow">Straight answers</span>
-              <h2>The questions worth<br /><em>asking before you publish.</em></h2>
+              <span class="lp-eyebrow" data-reveal="fade">Straight answers</span>
+              <h2 data-reveal>The questions worth<br /><em>asking before you publish.</em></h2>
 
               <div class="lp-faq-list">
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>Is my voice actually scored or analysed by AI?</summary>
                   <p>No. Your audio is never scored, ranked or sentiment-analysed, and we do not grade how you sound. The
                     one thing that gets checked is the on-screen phrase you read aloud, and only to confirm a live
@@ -4823,7 +4876,7 @@
                     score is derived from it or from the rest of the recording.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>Does Swapiki verify me, or verify that the work is mine?</summary>
                   <p>No &mdash; and we would rather say so than imply otherwise. Your identity is not checked, and
                     nothing is stamped as verified. What you get is a recording captured live in your browser: it tells a
@@ -4832,21 +4885,21 @@
                     references and offer stage &mdash; not by a portfolio page.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>What does a recruiter see when they open my link?</summary>
                   <p>Your projects with the problem, what you personally owned, and the one number that moved &mdash;
                     then your two-minute walkthrough. There is no score attached to any of it, and no verdict. They decide
                     from what you said, which is the entire point of the format.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>How long does it really take?</summary>
                   <p>Two minutes to record the walkthrough, and roughly ten minutes to publish the whole profile
                     end to end. The longer part is deciding which one or two projects are worth showing &mdash; that
                     judgement is yours, and nothing in the flow rushes it.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>Why does the jobs board ask me to reach 80% first?</summary>
                   <p>The jobs board is gated, and it is there so the listings you see are matched
                     against real proof instead of a wishlist. Seven things count towards it: your name and title, your
@@ -4856,14 +4909,14 @@
                     match score, not on the jobs existing.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>Is it genuinely free, and can I see it before anyone else does?</summary>
                   <p>Yes, free for the whole pilot, with no card step anywhere in the flow. And you can open your own
                     profile at <b>your-handle.swapiki.com</b> and read it end to end before you send that link to
                     anyone.</p>
                 </details>
 
-                <details class="lp-faq-row">
+                <details class="lp-faq-row" data-reveal>
                   <summary>Why not just post my demo on LinkedIn or YouTube?</summary>
                   <p>You can, and plenty of people do. The difference is the receiving end: a recruiter handed four links
                     opens whichever they clicked first and judges whatever they find there, in an order you do not
@@ -4882,17 +4935,17 @@
           <div class="lp-final-ribbon" data-wave data-bars="170" data-seed="63" data-play="0"></div>
 
           <div class="lp-final-inner">
-            <span class="lp-eyebrow">Pilot live &mdash; free while it lasts</span>
-            <h2>Your next interview is<br /><em>two minutes away.</em></h2>
-            <p class="lp-lead">Build a proof profile, record your walkthrough, share one link. On the other end: a
+            <span class="lp-eyebrow" data-reveal="fade">Pilot live &mdash; free while it lasts</span>
+            <h2 data-reveal>Your next interview is<br /><em>two minutes away.</em></h2>
+            <p class="lp-lead" data-reveal>Build a proof profile, record your walkthrough, share one link. On the other end: a
               hiring manager, not a screening bot.</p>
-            <div class="lp-cta">
+            <div class="lp-cta" data-reveal>
               <button type="button" class="lp-btn lp-btn-primary" onclick="router.navigate('dashboard')">Start my
                 profile &mdash; free <span aria-hidden="true">&rarr;</span></button>
               <button type="button" class="lp-btn lp-btn-ghost" onclick="router.navigate('candidate')">View demo
                 profile</button>
             </div>
-            <div class="lp-micro">No credit card &nbsp;&middot;&nbsp; No AI bots &nbsp;&middot;&nbsp; 10 minutes to
+            <div class="lp-micro" data-reveal>No credit card &nbsp;&middot;&nbsp; No AI bots &nbsp;&middot;&nbsp; 10 minutes to
               publish</div>
           </div>
         </section>
@@ -6950,16 +7003,46 @@
     #view-landing.lp-motion .lp-btn:hover span[aria-hidden="true"] { transform: translateX(4px); }
     #view-landing.lp-motion .lp-btn:active { transform: scale(.98); }
 
+    /* Further down the page: the same calm lift, and a few small touches. */
+    #view-landing.lp-motion .lp-fb-card.lp-done:hover,
+    #view-landing.lp-motion .lp-city-hub.lp-done:hover,
+    #view-landing.lp-motion .lp-live-cell.lp-done:hover {
+      transform: translate3d(0, -4px, 0);
+      box-shadow: 0 22px 40px -26px rgba(23, 19, 14, .35);
+    }
+    #view-landing.lp-motion .lp-city-hub-arrow { transition: transform .3s var(--lp-ease); }
+    #view-landing.lp-motion .lp-city-hub:hover .lp-city-hub-arrow { transform: translateX(5px); }
+
+    /* A FAQ answer eases in when its question opens. */
+    #view-landing.lp-motion .lp-faq-row[open] > p { animation: lp-faq-in .45s var(--lp-ease) both; }
+    @keyframes lp-faq-in {
+      from { opacity: 0; transform: translate3d(0, -6px, 0); }
+      to   { opacity: 1; transform: none; }
+    }
+
+    /* The oversized word behind the closing call to action drifts slowly. */
+    #view-landing.lp-motion .lp-final .lp-ghost2 { animation: lp-ghost-drift 26s ease-in-out infinite alternate; }
+    @keyframes lp-ghost-drift {
+      from { transform: translate(-53%, -50%); }
+      to   { transform: translate(-47%, -50%); }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       #view-landing [data-reveal] { opacity: 1 !important; transform: none !important; }
       #view-landing .lp-w > span { transform: none !important; }
       #view-landing .lp-hero-glow { animation: none !important; }
+      #view-landing .lp-faq-row[open] > p, #view-landing .lp-final .lp-ghost2 { animation: none !important; }
     }
   </style>
   <script>
     (function () {
       var root = document.getElementById('view-landing');
-      if (!root || !('IntersectionObserver' in window)) return;
+      if (!root) return;
+      if (!('IntersectionObserver' in window)) {
+        // Very old browsers: show everything rather than leave it invisible.
+        Array.prototype.forEach.call(root.querySelectorAll('[data-reveal]'), function (el) { el.classList.add('is-inview'); });
+        return;
+      }
       var reduced = false;
       try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { }
       var items = Array.prototype.slice.call(root.querySelectorAll('[data-reveal]'));
