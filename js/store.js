@@ -1,9 +1,40 @@
 // Swapiki Data Store with LocalStorage Persistence
 
 const DEFAULT_PROFILE = {
+  id: "",
+  username: "",
+  profileStatus: "draft",
+  name: "",
+  title: "",
+  experience: "",
+  location: "",
+  status: "",
+  education: "",
+  expertise: [],
+  avatar: null,
+  bio: "",
+  linkedin: "",
+  resumeUrl: null,
+  completionScore: 30,
+  views: 0,
+  audioListenRate: 0,
+  shares: 0,
+  loginReminderCount: 0,
+  voiceVerified: false,
+  voiceVerifiedAt: null,
+  voiceVerificationCount: 0,
+  profileAttestedAt: null,
+  profileAttestedName: null,
+  projects: []
+};
+
+// Known demo values ("Ananya Sharma" profile) — used only for fingerprint
+// detection and stripping contaminated profiles. Kept separate from
+// DEFAULT_PROFILE (the empty template for new accounts) so an empty default
+// doesn't make _isDemoValue() return false for everything.
+const DEMO_PROFILE = {
   id: "ananya_sharma",
   username: "ananya-sharma",
-  profileStatus: "published",
   name: "Ananya Sharma",
   title: "Lead Product Designer & UI Architect",
   experience: "8+ Years Experience",
@@ -11,9 +42,9 @@ const DEFAULT_PROFILE = {
   status: "Immediate / 15 Days Notice",
   education: "IIT Bombay, B.Des in Communication Design",
   expertise: ["Design Systems", "UPI Payment Flows", "User Research", "Prototyping"],
-  avatar: null,
   bio: "Passionate about building scalable fintech design systems and high-converting Indian checkout experiences. Proven track record scaling digital platforms at Swiggy and Razorpay.",
   linkedin: "https://linkedin.com/in/ananya-sharma-ux",
+  avatar: null,
   resumeUrl: null,
   completionScore: 85,
   views: 248,
@@ -25,42 +56,7 @@ const DEFAULT_PROFILE = {
   voiceVerificationCount: 0,
   profileAttestedAt: null,
   profileAttestedName: null,
-  projects: [
-    {
-      id: "p1",
-      title: "Razorpay Checkout & Vernacular UPI Flow",
-      role: "Lead Product Designer & UI Architect",
-      impact: "Reduced payment drop-offs by 34% across 12M monthly transactions",
-      tags: ["UPI 2.0", "Figma", "Design Tokens", "Vernacular UI"],
-      githubUrl: "https://github.com/example/upi-design-tokens",
-      liveUrl: "https://example.com/razorpay-case-study",
-      takeaways: [
-        "Architected multi-brand token system supporting 6 Indian languages for 12M+ users",
-        "Designed one-tap UPI intent flow reducing transaction failure rates by 28%",
-        "Led cross-functional design sprints with 45+ engineers across Bengaluru and Mumbai"
-      ],
-      audioUrl: null, // Synthetic waveform or recorded blob
-      audioDuration: "01:45",
-      recordedAt: "2 days ago"
-    },
-    {
-      id: "p2",
-      title: "Swiggy Instamart Dark Store Logistics Portal",
-      role: "Principal UX Researcher & Product Designer",
-      impact: "Cut order dispatch preparation time by 3.5 mins per delivery partner",
-      tags: ["Supply Chain UX", "Design Systems", "Web Audio API", "B2B SaaS"],
-      githubUrl: "https://github.com/example/instamart-logistics-ui",
-      liveUrl: "https://example.com/swiggy-case-study",
-      takeaways: [
-        "Conducted 40+ field interviews with dark store pickers in Bengaluru and Gurugram",
-        "Designed voice-assisted inventory audio prompts reducing picker picking errors by 45%",
-        "Achieved 94% positive usability score across 120 delivery hub managers"
-      ],
-      audioUrl: null,
-      audioDuration: "01:58",
-      recordedAt: "1 week ago"
-    }
-  ]
+  projects: []
 };
 
 class SwapikiStore {
@@ -74,8 +70,8 @@ class SwapikiStore {
     this.referralBonusPerReferral = 1;
     this.referralBonusCap = 2;
     this.referralStats = { total: 0, credited: 0 };
-    this.supabaseUrl = "https://eusbnfgfurrmrccaxbub.supabase.co";
-    this.supabaseKey = "sb_publishable_cpyZT7-regpFjo2qmg0uYQ_j6qwoa21";
+    this.supabaseUrl = null; // populated by /config at boot; null = local-only mode
+    this.supabaseKey = null; // populated by /config at boot; null = local-only mode
     this.siteEnv = "prod"; // "prod" | "test" — set by /config at boot
     this.supabase = null;
     this.currentUser = null; // Supabase auth.users row for the logged-in candidate, or null when signed out
@@ -167,9 +163,10 @@ class SwapikiStore {
   async adminListCandidates() {
     if (!this.supabase || !this.isAdminUser) return [];
 
-    const { data, error } = await this.supabase
-      .from('candidates')
-      .select(`
+    const { data, error } = await this._withTimeout(
+      this.supabase
+        .from('candidates')
+        .select(`
       id,
       user_id,
       username,
@@ -191,7 +188,10 @@ class SwapikiStore {
       voice_verification_count,
       updated_at
     `)
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false }),
+      10000,
+      'admin_list_candidates_timeout'
+    );
 
     if (error) throw error;
 
@@ -225,10 +225,14 @@ class SwapikiStore {
 
   async adminListAdmins() {
     if (!this.supabase || !this.isAdminUser) return [];
-    const { data, error } = await this.supabase
-      .from('admins')
-      .select('user_id, email, created_at')
-      .order('created_at', { ascending: true });
+    const { data, error } = await this._withTimeout(
+      this.supabase
+        .from('admins')
+        .select('user_id, email, created_at')
+        .order('created_at', { ascending: true }),
+      10000,
+      'admin_list_admins_timeout'
+    );
     if (error) throw error;
     return data || [];
   }
@@ -418,7 +422,10 @@ class SwapikiStore {
     }
     this.currentUser = null;
     try { localStorage.removeItem(this.key); } catch (e) { }
-    this.data = { ...DEFAULT_PROFILE };
+    // Sign out must not resurrect the shared demo profile into local state.
+    // Use an empty template so a stale demo copy can never be merged back into
+    // a real account on the next login (see _reconcileProfileWithLocal).
+    this.data = this.emptyProfileTemplate();
     if (typeof window !== 'undefined' && window.posthog && typeof window.posthog.reset === 'function') {
       try { window.posthog.reset(); } catch (e) { }
     }
@@ -620,7 +627,11 @@ class SwapikiStore {
   async getPublishedJobs() {
     if (!this.supabase) return [];
     try {
-      const { data, error } = await this.supabase.rpc('get_published_jobs');
+      const { data, error } = await this._withTimeout(
+        this.supabase.rpc('get_published_jobs'),
+        10000,
+        'get_published_jobs_timeout'
+      );
       if (error) { console.warn('[getPublishedJobs] Supabase error:', error); return []; }
       return Array.isArray(data) ? data : [];
     } catch (e) {
@@ -716,10 +727,14 @@ class SwapikiStore {
   async adminListJobs() {
     if (!this.supabase || !this.isAdminUser) return [];
     try {
-      const { data, error } = await this.supabase
-        .from('jobs')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await this._withTimeout(
+        this.supabase
+          .from('jobs')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        10000,
+        'admin_list_jobs_timeout'
+      );
       if (error) throw error;
       return data || [];
     } catch (e) {
@@ -1021,11 +1036,11 @@ class SwapikiStore {
   }
 
   /**
-   * True when `value` is exactly what the shared demo profile (DEFAULT_PROFILE,
+   * True when `value` is exactly what the shared demo profile (DEMO_PROFILE,
    * "Ananya Sharma") holds for `field`.
    */
   _isDemoValue(field, value) {
-    const demo = DEFAULT_PROFILE[field];
+    const demo = DEMO_PROFILE[field];
     if (this._isBlank(value) || this._isBlank(demo)) return false;
     const norm = v => (Array.isArray(v) ? v.join(',') : String(v)).trim().toLowerCase();
     return norm(value) === norm(demo);
@@ -1039,8 +1054,8 @@ class SwapikiStore {
    */
   _hasDemoFingerprint(profile) {
     if (!profile) return false;
-    return profile.id === DEFAULT_PROFILE.id
-      || profile.username === DEFAULT_PROFILE.username
+    return profile.id === DEMO_PROFILE.id
+      || profile.username === DEMO_PROFILE.username
       || this._isDemoValue('bio', profile.bio)
       || this._isDemoValue('linkedin', profile.linkedin);
   }
@@ -1057,7 +1072,7 @@ class SwapikiStore {
     SwapikiStore.RECONCILED_FIELDS.forEach(f => {
       if (f === 'name') return;
       if (this._isDemoValue(f, profile[f])) {
-        profile[f] = Array.isArray(DEFAULT_PROFILE[f]) ? [] : '';
+        profile[f] = Array.isArray(DEMO_PROFILE[f]) ? [] : '';
         changed = true;
       }
     });
@@ -1237,8 +1252,11 @@ class SwapikiStore {
     if (!Array.isArray(this.data.projects)) {
       this.data.projects = [];
     }
-    if (!this.data.username) this.data.username = this.data.id || "candidate";
-    if (!this.data.profileStatus) this.data.profileStatus = "draft";
+    // Only fill in truly-missing values (null/undefined); an empty string is
+    // a legitimate "not set yet" state and must not be replaced with a
+    // placeholder like "candidate".
+    if (this.data.username == null) this.data.username = this.data.id != null ? this.data.id : "";
+    if (this.data.profileStatus == null) this.data.profileStatus = "draft";
     // Live-recording fields are new; older locally-cached profiles lack them.
     // Backfill defaults so nothing downstream reads `undefined`.
     if (typeof this.data.voiceVerified !== 'boolean') this.data.voiceVerified = false;
@@ -1275,7 +1293,7 @@ class SwapikiStore {
     } catch (e) {
       console.warn("LocalStorage quota exceeded, retaining memory state.", e);
     }
-    this.syncWithApi(data);
+    this.syncWithApi(data).catch(() => { });
   }
 
   async syncWithApi(data) {
@@ -1284,10 +1302,10 @@ class SwapikiStore {
       // the RLS policies require auth.uid() === user_id, so anonymous/demo
       // browsing stays purely local and never hits the cloud table.
       if (this.supabase && this.currentUser) {
-        this.supabase.from('candidates').upsert({
+        return this.supabase.from('candidates').upsert({
           id: data.id || this.currentUser.id,
           user_id: this.currentUser.id,
-          username: data.username || 'ananya-sharma',
+          username: data.username || '',
           name: data.name,
           title: data.title,
           experience: data.experience,
@@ -1312,9 +1330,16 @@ class SwapikiStore {
           audio_listen_rate: data.audioListenRate ?? 0,
           updated_at: new Date()
         }).then(({ error }) => {
-          if (!error) console.log("☁️ Candidate profile synced to Supabase Cloud Database!");
-          else console.warn("Supabase sync notice:", error.message);
-        }).catch(() => { });
+          if (!error) {
+            console.log("☁️ Candidate profile synced to Supabase Cloud Database!");
+          } else {
+            console.warn("Supabase profile sync failed:", error.message);
+            throw error;
+          }
+        }).catch((e) => {
+          console.warn("Supabase profile sync threw:", e && e.message);
+          throw e;
+        });
       }
 
     } catch (e) { }
@@ -1472,8 +1497,12 @@ class SwapikiStore {
       if (!ref) return { recorded: false, reason: 'no-ref' };
 
       // Belt-and-braces: never let someone attribute a referral to themselves.
+      // A new account may not have a username yet, so fall back to the demo
+      // username as the self-check baseline (matches the old DEFAULT_PROFILE
+      // behavior).
       const ownUsername = String((this.data && this.data.username) || '').toLowerCase();
-      if (ownUsername && ref === ownUsername) {
+      const selfBasename = ownUsername || String(DEMO_PROFILE.username || '').toLowerCase();
+      if (selfBasename && ref === selfBasename) {
         try { localStorage.removeItem('swapiki_ref'); } catch (e) {}
         return { recorded: false, reason: 'self' };
       }

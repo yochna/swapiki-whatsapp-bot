@@ -211,8 +211,11 @@
        once /config reports the environment. On the test site it stays a stub,
        so no analytics script is fetched there at all (faster + no test noise). -->
   <script>
+    // PostHog key is supplied per-deployment via /config (see functions/config.js
+    // and app.js applyConfig()). Leaving it empty disables PostHog entirely —
+    // no analytics script is fetched, keeping the page fast and test-clean.
     window.SWAPIKI_POSTHOG_CONFIG = {
-      POSTHOG_KEY: "phc_CdssyCXBkUVJVUHtnNaBXznjpRf3zapaekNCjn485Ans",
+      POSTHOG_KEY: "",
       POSTHOG_HOST: "https://us.i.posthog.com"
     };
     if (window.SWAPIKI_POSTHOG_CONFIG.POSTHOG_KEY) {
