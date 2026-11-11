@@ -344,6 +344,7 @@ class SwapikiApp {
         clearTimeout(sessionTimer);
       }
       this.refreshAuthUI();
+      this.applyTheme();
       try { this.maybeStartGuidedTour(); } catch (e) { /* ignore */ }
 
       // One delegated listener for the jobs-page "personal Telegram link" button:
@@ -3109,6 +3110,42 @@ class SwapikiApp {
     // Keep the landing invite banner in step with auth: shown to a fresh invited
     // visitor, gone the moment they sign in.
     this.maybeShowInviteBanner();
+  }
+
+  // ---------------------------------------------------------------------
+  // THEME — light/dark toggle, persisted to localStorage.
+  // Tailwind runs darkMode: "class", so adding/removing `.dark` on <html>
+  // flips every `dark:` utility. The custom inline CSS (nav, header, landing
+  // .lp-* vars) gets matching overrides below in index.html.
+  // ---------------------------------------------------------------------
+
+  applyTheme() {
+    try {
+      const stored = localStorage.getItem('swapiki_theme');
+      const wantsDark = stored === 'dark'
+        || (stored == null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', wantsDark);
+      document.documentElement.classList.toggle('light', !wantsDark);
+      const btn = document.getElementById('theme-toggle');
+      if (btn) {
+        btn.setAttribute('aria-pressed', String(wantsDark));
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = wantsDark ? 'light_mode' : 'dark_mode';
+      }
+    } catch (e) { /* theme is optional */ }
+  }
+
+  toggleTheme() {
+    const isDark = document.documentElement.classList.toggle('dark');
+    document.documentElement.classList.toggle('light', !isDark);
+    try { localStorage.setItem('swapiki_theme', isDark ? 'dark' : 'light'); } catch (e) { }
+    const btn = document.getElementById('theme-toggle');
+    if (btn) {
+      btn.setAttribute('aria-pressed', String(isDark));
+      const icon = btn.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = isDark ? 'light_mode' : 'dark_mode';
+    }
+    this.showToast(isDark ? 'Dark mode on' : 'Light mode on');
   }
 
   /** (Re)initializes the Google Sign-In buttons — safe to call repeatedly since the GSI script loads async. */

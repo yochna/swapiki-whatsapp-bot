@@ -1205,6 +1205,94 @@
         margin-top: 0.875rem !important;
       }
     }
+
+    /* ================= DARK MODE ================= */
+    /* Tailwind `dark:` utilities flip automatically on .dark. The custom
+       inline colors below need explicit .dark overrides so the header, nav
+       links and utility-colored buttons don't stay ink-black on a dark bg. */
+    html.dark {
+      color-scheme: dark;
+    }
+
+    html.dark body {
+      background-color: #0F0C09;
+      color: #F7F3EC;
+    }
+
+    html.dark #site-header {
+      background: rgba(15, 12, 9, 0.95);
+      border-color: #2E2820;
+    }
+
+    html.dark .nav-link {
+      color: #D5C9B6;
+    }
+
+    html.dark .nav-link:hover,
+    html.dark .nav-link.is-active {
+      color: #F7F3EC;
+      background: #2E2820;
+    }
+
+    html.dark .nav-link.is-active {
+      box-shadow: inset 0 -2px 0 #D9481F;
+    }
+
+    html.dark .mobile-nav-link {
+      color: #F7F3EC;
+    }
+
+    html.dark .mobile-nav-link.is-active {
+      background: #2E2820;
+      box-shadow: inset 3px 0 0 #D9481F;
+    }
+
+    html.dark #mobile-nav-menu {
+      background: #0F0C09;
+      border-color: #2E2820;
+    }
+
+    html.dark [class*="text-\[#17130E\]"] {
+      color: #F7F3EC !important;
+    }
+
+    html.dark [class*="text-\[#6B6156\]"] {
+      color: #D5C9B6 !important;
+    }
+
+    html.dark [class*="hover:bg-\[#EFE9DE\]"]:hover {
+      background-color: #2E2820 !important;
+    }
+
+    html.dark [class*="bg-\[#F7F3EC\]"] {
+      background-color: #0F0C09 !important;
+    }
+
+    html.dark [class*="border-\[#E1D9CB\]"] {
+      border-color: #2E2820 !important;
+    }
+
+    html.dark .bg-white,
+    html.dark .border.border-slate-200 {
+      background-color: #17130E !important;
+      border-color: #2E2820 !important;
+    }
+
+    html.dark .bg-white,
+    html.dark .border.border-slate-200,
+    html.dark .text-slate-900,
+    html.dark .text-slate-800 {
+      color: #F7F3EC !important;
+    }
+
+    html.dark .text-slate-500,
+    html.dark .text-slate-600,
+    html.dark .text-slate-400,
+    html.dark .text-slate-700 {
+      color: #D5C9B6 !important;
+    }
+
+    /* Theme toggle icon swap: dark_mode -> light_mode via JS (ligature text) */
   </style>
   <noscript><style>#view-landing [data-reveal] { opacity: 1 !important; transform: none !important; }</style></noscript>
   <style>
@@ -4371,6 +4459,11 @@
         <button data-tour="nav-help" onclick="app.openOnboardingGuide()" title="How Swapiki Works"
           class="auth-user-only hidden sm:flex items-center justify-center p-2 rounded-lg text-[#6B6156] hover:text-[#D9481F] hover:bg-[#EFE9DE] transition-colors">
           <span class="material-symbols-outlined text-xl">help</span>
+        </button>
+        <button id="theme-toggle" onclick="event.stopPropagation(); app.toggleTheme()"
+          title="Toggle dark mode" aria-pressed="false"
+          class="flex items-center justify-center p-2 rounded-lg text-[#6B6156] hover:text-[#D9481F] hover:bg-[#EFE9DE] transition-colors">
+          <span class="material-symbols-outlined text-xl">dark_mode</span>
         </button>
         <button onclick="app.openShareModal()"
           class="hidden xs:block bg-primary hover:bg-primary-container text-white px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all active:opacity-80 shadow-sm">Share
