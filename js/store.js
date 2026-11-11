@@ -292,7 +292,11 @@ class SwapikiStore {
    */
   async adminGetStats() {
     if (!this.supabase || !this.isAdminUser) return null;
-    const { data, error } = await this.supabase.rpc('get_admin_stats');
+    const { data, error } = await this._withTimeout(
+      this.supabase.rpc('get_admin_stats'),
+      10000,
+      'admin_get_stats_timeout'
+    );
     if (error) throw error;
     return data;
   }
@@ -303,9 +307,9 @@ class SwapikiStore {
     const accessToken = sessionData && sessionData.session ? sessionData.session.access_token : null;
     if (!accessToken) throw new Error("Your session has expired. Please log in again.");
 
-    const res = await fetch('/api/admin-jobs-stats', {
+    const res = await this._fetchWithTimeout('/api/admin-jobs-stats', {
       headers: { Authorization: `Bearer ${accessToken}` }
-    });
+    }, 10000);
     const result = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(result.error || 'Could not load jobs stats.');
     return result;
@@ -324,9 +328,9 @@ class SwapikiStore {
     const accessToken = sessionData && sessionData.session ? sessionData.session.access_token : null;
     if (!accessToken) throw new Error("Your session has expired. Please log in again.");
 
-    const res = await fetch('/api/admin-time-stats', {
+    const res = await this._fetchWithTimeout('/api/admin-time-stats', {
       headers: { Authorization: `Bearer ${accessToken}` }
-    });
+    }, 10000);
     const result = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(result.error || 'Could not load time-spent stats.');
     return result;
@@ -559,6 +563,20 @@ class SwapikiStore {
       timer = setTimeout(() => reject(new Error(label || 'timeout')), ms);
     });
     return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
+  }
+
+  /** fetch with a hard timeout; rejects with Error(label) if it stalls. */
+  _fetchWithTimeout(input, init, ms) {
+    let timer;
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('fetch_timeout')), ms);
+    });
+    const fetchPromise = fetch(input, { ...init, signal: ctrl ? ctrl.signal : undefined });
+    return Promise.race([fetchPromise, timeout]).finally(() => {
+      if (timer) clearTimeout(timer);
+      if (ctrl) ctrl.abort();
+    });
   }
 
   async getProfileByUsername(username, { includeUnpublished = false, strict = false, timeoutMs = 15000 } = {}) {
@@ -826,9 +844,13 @@ class SwapikiStore {
    */
   async fetchRepoNotes() {
     if (!this.supabase || !this.currentUser) return {};
-    const { data, error } = await this.supabase
-      .from('repo_notes')
-      .select('repo_name, notes, updated_at');
+    const { data, error } = await this._withTimeout(
+      this.supabase
+        .from('repo_notes')
+        .select('repo_name, notes, updated_at'),
+      10000,
+      'fetch_repo_notes_timeout'
+    );
     if (error) {
       this.noteRepoNotesUnavailable(error);
       return {};
@@ -850,14 +872,18 @@ class SwapikiStore {
   async saveRepoNote(repoName, notes) {
     const name = String(repoName || '').trim().slice(0, 100);
     if (!name || !this.supabase || !this.currentUser) return false;
-    const { error } = await this.supabase
-      .from('repo_notes')
-      .upsert({
-        user_id: this.currentUser.id,
-        repo_name: name,
-        notes: this.cleanRepoNotes(notes),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,repo_name' });
+    const { error } = await this._withTimeout(
+      this.supabase
+        .from('repo_notes')
+        .upsert({
+          user_id: this.currentUser.id,
+          repo_name: name,
+          notes: this.cleanRepoNotes(notes),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id,repo_name' }),
+      10000,
+      'save_repo_note_timeout'
+    );
     if (error) {
       this.noteRepoNotesUnavailable(error);
       return false;
@@ -871,11 +897,15 @@ class SwapikiStore {
     const name = String(repoName || '').trim();
     try { if (typeof localStorage !== 'undefined') localStorage.removeItem('swapiki_repo_notes_' + name); } catch (e) { }
     if (!name || !this.supabase || !this.currentUser) return false;
-    const { error } = await this.supabase
-      .from('repo_notes')
-      .delete()
-      .eq('user_id', this.currentUser.id)
-      .eq('repo_name', name);
+    const { error } = await this._withTimeout(
+      this.supabase
+        .from('repo_notes')
+        .delete()
+        .eq('user_id', this.currentUser.id)
+        .eq('repo_name', name),
+      10000,
+      'delete_repo_note_timeout'
+    );
     if (error) {
       this.noteRepoNotesUnavailable(error);
       return false;
@@ -1858,12 +1888,16 @@ class SwapikiStore {
   /** The open profile reports, newest first (requires isAdminUser, enforced by RLS too). */
   async adminListProfileReports() {
     if (!this.supabase || !this.isAdminUser) return [];
-    const { data, error } = await this.supabase
-      .from('profile_reports')
-      .select('id, candidate_id, reason, details, reporter_email, page_url, status, created_at')
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    const { data, error } = await this._withTimeout(
+      this.supabase
+        .from('profile_reports')
+        .select('id, candidate_id, reason, details, reporter_email, page_url, status, created_at')
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+        .limit(200),
+      10000,
+      'admin_list_profile_reports_timeout'
+    );
     if (error) throw error;
     return data || [];
   }
@@ -1881,11 +1915,15 @@ class SwapikiStore {
   /** Admin view of all submitted feedback (requires isAdminUser, enforced by RLS too). */
   async adminListFeedback() {
     if (!this.supabase || !this.isAdminUser) return [];
-    const { data, error } = await this.supabase
-      .from('feedback')
-      .select('id, user_id, name, email, category, message, url, created_at')
-      .order('created_at', { ascending: false })
-      .limit(200);
+    const { data, error } = await this._withTimeout(
+      this.supabase
+        .from('feedback')
+        .select('id, user_id, name, email, category, message, url, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200),
+      10000,
+      'admin_list_feedback_timeout'
+    );
     if (error) throw error;
     return data || [];
   }
